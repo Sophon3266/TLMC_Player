@@ -8,6 +8,10 @@
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\layout\\activity_text.xml"
     },
     {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/item_file.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/item_file.xml"
+    },
+    {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-mergeDebugResources-44:\\layout\\item_playlist.xml",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\layout\\item_playlist.xml"
     },
@@ -18,10 +22,6 @@
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-mergeDebugResources-44:\\layout\\item_search_result.xml",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\layout\\item_search_result.xml"
-    },
-    {
-        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_browser.xml",
-        "source": "com.tlmc.player.app-main-47:/layout/activity_browser.xml"
     },
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-mergeDebugResources-44:\\layout\\activity_image.xml",

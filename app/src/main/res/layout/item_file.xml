@@ -35,8 +35,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="middle"
-                android:maxLines="1"
-                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:maxLines="2"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?attr/colorOnSurface" />
 
             <TextView
