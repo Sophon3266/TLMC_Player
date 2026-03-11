@@ -9,6 +9,8 @@ import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,6 +36,22 @@ class BrowserViewModel @Inject constructor(
     val error: LiveData<String?> = _error
 
     private val pathHistory = mutableListOf<String>()
+
+    // Search
+    private val _searchResults = MutableLiveData<List<WebDavFile>>(emptyList())
+    val searchResults: LiveData<List<WebDavFile>> = _searchResults
+
+    private val _isSearching = MutableLiveData(false)
+    val isSearching: LiveData<Boolean> = _isSearching
+
+    private val _searchStatus = MutableLiveData<String?>()
+    val searchStatus: LiveData<String?> = _searchStatus
+
+    private var searchJob: Job? = null
+
+    companion object {
+        private const val MAX_SEARCH_RESULTS = 200
+    }
 
     fun loadDirectory(path: String) {
         viewModelScope.launch {
@@ -86,6 +104,69 @@ class BrowserViewModel @Inject constructor(
         }
 
         return false
+    }
+
+    // ==================== Search ====================
+
+    fun searchFiles(query: String) {
+        searchJob?.cancel()
+        _searchResults.value = emptyList()
+        _isSearching.value = true
+        _searchStatus.value = "正在搜索..."
+
+        val basePath = _currentPath.value ?: "/"
+        searchJob = viewModelScope.launch {
+            val results = mutableListOf<WebDavFile>()
+            try {
+                searchRecursive(basePath, query.lowercase(), results)
+                _searchStatus.value = "搜索完成，找到 ${results.size} 个结果"
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _searchStatus.value = "搜索已取消，找到 ${results.size} 个结果"
+                throw e
+            } catch (e: Exception) {
+                _searchStatus.value = "搜索出错: ${e.message}"
+            }
+            _isSearching.value = false
+        }
+    }
+
+    private suspend fun searchRecursive(path: String, query: String, results: MutableList<WebDavFile>) {
+        if (results.size >= MAX_SEARCH_RESULTS) return
+
+        // Check cancellation
+        searchJob?.ensureActive()
+
+        val result = repository.listFiles(path)
+        result.onSuccess { files ->
+            for (file in files) {
+                searchJob?.ensureActive()
+                if (results.size >= MAX_SEARCH_RESULTS) {
+                    _searchStatus.value = "已达到最大结果数 ($MAX_SEARCH_RESULTS)"
+                    return
+                }
+
+                if (file.name.lowercase().contains(query)) {
+                    results.add(file)
+                    _searchResults.value = results.toList()
+                }
+
+                if (file.isDirectory) {
+                    _searchStatus.value = "正在搜索: ${file.name} (已找到 ${results.size} 个)"
+                    searchRecursive(file.path, query, results)
+                }
+            }
+        }
+    }
+
+    fun cancelSearch() {
+        searchJob?.cancel()
+        _isSearching.value = false
+    }
+
+    // ==================== Utility ====================
+
+    fun getFileUrl(path: String): String {
+        return repository.getFileUrl(path)
     }
 
     fun getConfig(): ServerConfig = configManager.getConfig()

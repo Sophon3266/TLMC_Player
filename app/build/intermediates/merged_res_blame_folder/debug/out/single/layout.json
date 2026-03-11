@@ -1,5 +1,13 @@
 [
     {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/dialog_playlist.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/dialog_playlist.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/dialog_search.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/dialog_search.xml"
+    },
+    {
         "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/dialog_settings.xml",
         "source": "com.tlmc.player.app-main-47:/layout/dialog_settings.xml"
     },
@@ -20,11 +28,19 @@
         "source": "com.tlmc.player.app-main-47:/layout/activity_image.xml"
     },
     {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/item_playlist.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/item_playlist.xml"
+    },
+    {
         "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_browser.xml",
         "source": "com.tlmc.player.app-main-47:/layout/activity_browser.xml"
     },
     {
         "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_player.xml",
         "source": "com.tlmc.player.app-main-47:/layout/activity_player.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/item_search_result.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/item_search_result.xml"
     }
 ]
