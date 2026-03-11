@@ -51,7 +51,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingBottom="72dp" />
+                android:paddingBottom="72dp"
+                android:scrollbars="vertical"
+                app:fastScrollEnabled="true"
+                app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
+                app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
+                app:fastScrollHorizontalThumbDrawable="@drawable/fastscroll_thumb"
+                app:fastScrollHorizontalTrackDrawable="@drawable/fastscroll_track" />
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 

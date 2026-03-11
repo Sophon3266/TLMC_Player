@@ -34,6 +34,8 @@ color md_theme_surface
 color md_theme_surfaceVariant
 color md_theme_tertiary
 drawable bg_play_button
+drawable fastscroll_thumb
+drawable fastscroll_track
 drawable ic_add_to_playlist
 drawable ic_back
 drawable ic_chevron_right

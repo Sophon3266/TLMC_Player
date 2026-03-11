@@ -55,7 +55,7 @@ class BrowserViewModel @Inject constructor(
 
     companion object {
         private const val MAX_SEARCH_RESULTS = 200
-        private const val MAX_CONCURRENT_REQUESTS = 8
+        private const val MAX_CONCURRENT_REQUESTS = 32
     }
 
     fun loadDirectory(path: String) {

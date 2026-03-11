@@ -66,7 +66,7 @@ class WebDavClient @Inject constructor(
 
             val body = response.body?.string() ?: return@withContext Result.success(emptyList())
             val files = parseMultiStatus(body, path)
-            Result.success(files.sortedWith(compareByDescending<WebDavFile> { it.isDirectory }.thenBy { it.name }))
+            Result.success(files.sortedWith(compareByDescending<WebDavFile> { it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
         } catch (e: Exception) {
             Result.failure(e)
         }

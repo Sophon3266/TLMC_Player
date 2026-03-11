@@ -54,7 +54,7 @@ public final class BrowserViewModel extends androidx.lifecycle.ViewModel {
     @org.jetbrains.annotations.Nullable()
     private kotlinx.coroutines.Job searchJob;
     private static final int MAX_SEARCH_RESULTS = 200;
-    private static final int MAX_CONCURRENT_REQUESTS = 8;
+    private static final int MAX_CONCURRENT_REQUESTS = 32;
     @org.jetbrains.annotations.NotNull()
     public static final com.tlmc.player.ui.browser.BrowserViewModel.Companion Companion = null;
     
