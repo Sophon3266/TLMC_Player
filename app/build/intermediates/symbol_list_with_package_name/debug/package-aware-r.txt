@@ -3555,6 +3555,8 @@ id exo_vr
 id expand_activities_button
 id expanded_menu
 id fade
+id fastScrollThumb
+id fastScrollTrack
 id fileIcon
 id fileName
 id fileSize

@@ -3554,6 +3554,8 @@ int id exo_vr 0x7f0a00f8
 int id expand_activities_button 0x7f0a00f9
 int id expanded_menu 0x7f0a00fa
 int id fade 0x7f0a00fb
+int id fastScrollThumb 0x7f0a026a
+int id fastScrollTrack 0x7f0a026b
 int id fileIcon 0x7f0a00fc
 int id fileName 0x7f0a00fd
 int id fileSize 0x7f0a00fe

@@ -51,15 +51,26 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingBottom="72dp"
-                android:scrollbars="vertical"
-                app:fastScrollEnabled="true"
-                app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
-                app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
-                app:fastScrollHorizontalThumbDrawable="@drawable/fastscroll_thumb"
-                app:fastScrollHorizontalTrackDrawable="@drawable/fastscroll_track" />
+                android:paddingBottom="72dp" />
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <!-- Custom fast scroll touch area -->
+        <View
+            android:id="@+id/fastScrollTrack"
+            android:layout_width="32dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end" />
+
+        <!-- Custom fast scroll thumb -->
+        <View
+            android:id="@+id/fastScrollThumb"
+            android:layout_width="12dp"
+            android:layout_height="0dp"
+            android:layout_gravity="end"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/fastscroll_thumb"
+            android:visibility="invisible" />
 
         <ProgressBar
             android:id="@+id/progressBar"

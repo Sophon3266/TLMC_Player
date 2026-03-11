@@ -37,6 +37,12 @@ public final class ActivityBrowserBinding implements ViewBinding {
   public final TextView emptyView;
 
   @NonNull
+  public final View fastScrollThumb;
+
+  @NonNull
+  public final View fastScrollTrack;
+
+  @NonNull
   public final TextView miniPlayerArtist;
 
   @NonNull
@@ -77,17 +83,20 @@ public final class ActivityBrowserBinding implements ViewBinding {
 
   private ActivityBrowserBinding(@NonNull CoordinatorLayout rootView,
       @NonNull LinearLayout breadcrumbContainer, @NonNull HorizontalScrollView breadcrumbScroll,
-      @NonNull TextView emptyView, @NonNull TextView miniPlayerArtist,
-      @NonNull MaterialCardView miniPlayerCard, @NonNull LinearLayout miniPlayerInfo,
-      @NonNull ImageButton miniPlayerNext, @NonNull ImageButton miniPlayerPlayPause,
-      @NonNull ImageButton miniPlayerPlaylist, @NonNull ImageButton miniPlayerPrev,
-      @NonNull ProgressBar miniPlayerProgress, @NonNull TextView miniPlayerTitle,
-      @NonNull ProgressBar progressBar, @NonNull RecyclerView recyclerView,
-      @NonNull SwipeRefreshLayout swipeRefresh, @NonNull MaterialToolbar toolbar) {
+      @NonNull TextView emptyView, @NonNull View fastScrollThumb, @NonNull View fastScrollTrack,
+      @NonNull TextView miniPlayerArtist, @NonNull MaterialCardView miniPlayerCard,
+      @NonNull LinearLayout miniPlayerInfo, @NonNull ImageButton miniPlayerNext,
+      @NonNull ImageButton miniPlayerPlayPause, @NonNull ImageButton miniPlayerPlaylist,
+      @NonNull ImageButton miniPlayerPrev, @NonNull ProgressBar miniPlayerProgress,
+      @NonNull TextView miniPlayerTitle, @NonNull ProgressBar progressBar,
+      @NonNull RecyclerView recyclerView, @NonNull SwipeRefreshLayout swipeRefresh,
+      @NonNull MaterialToolbar toolbar) {
     this.rootView = rootView;
     this.breadcrumbContainer = breadcrumbContainer;
     this.breadcrumbScroll = breadcrumbScroll;
     this.emptyView = emptyView;
+    this.fastScrollThumb = fastScrollThumb;
+    this.fastScrollTrack = fastScrollTrack;
     this.miniPlayerArtist = miniPlayerArtist;
     this.miniPlayerCard = miniPlayerCard;
     this.miniPlayerInfo = miniPlayerInfo;
@@ -145,6 +154,18 @@ public final class ActivityBrowserBinding implements ViewBinding {
       id = R.id.emptyView;
       TextView emptyView = ViewBindings.findChildViewById(rootView, id);
       if (emptyView == null) {
+        break missingId;
+      }
+
+      id = R.id.fastScrollThumb;
+      View fastScrollThumb = ViewBindings.findChildViewById(rootView, id);
+      if (fastScrollThumb == null) {
+        break missingId;
+      }
+
+      id = R.id.fastScrollTrack;
+      View fastScrollTrack = ViewBindings.findChildViewById(rootView, id);
+      if (fastScrollTrack == null) {
         break missingId;
       }
 
@@ -227,9 +248,10 @@ public final class ActivityBrowserBinding implements ViewBinding {
       }
 
       return new ActivityBrowserBinding((CoordinatorLayout) rootView, breadcrumbContainer,
-          breadcrumbScroll, emptyView, miniPlayerArtist, miniPlayerCard, miniPlayerInfo,
-          miniPlayerNext, miniPlayerPlayPause, miniPlayerPlaylist, miniPlayerPrev,
-          miniPlayerProgress, miniPlayerTitle, progressBar, recyclerView, swipeRefresh, toolbar);
+          breadcrumbScroll, emptyView, fastScrollThumb, fastScrollTrack, miniPlayerArtist,
+          miniPlayerCard, miniPlayerInfo, miniPlayerNext, miniPlayerPlayPause, miniPlayerPlaylist,
+          miniPlayerPrev, miniPlayerProgress, miniPlayerTitle, progressBar, recyclerView,
+          swipeRefresh, toolbar);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

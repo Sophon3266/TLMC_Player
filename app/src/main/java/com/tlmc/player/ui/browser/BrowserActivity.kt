@@ -9,6 +9,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
@@ -66,6 +67,9 @@ class BrowserActivity : AppCompatActivity() {
     private var searchProgressBar: ProgressBar? = null
     private var searchStatusText: TextView? = null
 
+    // Fast scroll
+    private var isDraggingScrollbar = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityBrowserBinding.inflate(layoutInflater)
@@ -73,6 +77,7 @@ class BrowserActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.toolbar)
         setupRecyclerView()
+        setupFastScroller()
         setupSwipeRefresh()
         setupMiniPlayer()
         observeViewModel()
@@ -111,6 +116,92 @@ class BrowserActivity : AppCompatActivity() {
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(this@BrowserActivity)
             adapter = fileAdapter
+        }
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setupFastScroller() {
+        // Set thumb height to 5% of screen height
+        binding.fastScrollThumb.post {
+            val screenHeight = resources.displayMetrics.heightPixels
+            val thumbHeight = (screenHeight * 0.05f).toInt()
+            binding.fastScrollThumb.layoutParams = binding.fastScrollThumb.layoutParams.apply {
+                height = thumbHeight
+            }
+            updateFastScrollThumb()
+        }
+
+        // Update thumb position on scroll
+        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (!isDraggingScrollbar) {
+                    updateFastScrollThumb()
+                }
+            }
+        })
+
+        // Handle drag on track area
+        binding.fastScrollTrack.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    isDraggingScrollbar = true
+                    binding.fastScrollThumb.isPressed = true
+                    binding.swipeRefresh.isEnabled = false
+                    handleScrollbarDrag(event.y)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    handleScrollbarDrag(event.y)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    isDraggingScrollbar = false
+                    binding.fastScrollThumb.isPressed = false
+                    binding.swipeRefresh.isEnabled = true
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun updateFastScrollThumb() {
+        val rv = binding.recyclerView
+        val range = rv.computeVerticalScrollRange()
+        val extent = rv.computeVerticalScrollExtent()
+
+        if (range <= extent) {
+            binding.fastScrollThumb.visibility = View.INVISIBLE
+            return
+        }
+
+        binding.fastScrollThumb.visibility = View.VISIBLE
+        val offset = rv.computeVerticalScrollOffset()
+        val trackHeight = binding.fastScrollTrack.height
+        val thumbHeight = binding.fastScrollThumb.height
+        val maxThumbTop = trackHeight - thumbHeight
+        if (maxThumbTop > 0) {
+            val fraction = offset.toFloat() / (range - extent).toFloat()
+            binding.fastScrollThumb.translationY = fraction * maxThumbTop
+        }
+    }
+
+    private fun handleScrollbarDrag(touchY: Float) {
+        val trackHeight = binding.fastScrollTrack.height
+        val thumbHeight = binding.fastScrollThumb.height
+        val maxThumbTop = trackHeight - thumbHeight
+        if (maxThumbTop <= 0) return
+
+        val thumbTop = (touchY - thumbHeight / 2f).coerceIn(0f, maxThumbTop.toFloat())
+        val fraction = thumbTop / maxThumbTop
+
+        binding.fastScrollThumb.translationY = thumbTop
+
+        val itemCount = binding.recyclerView.adapter?.itemCount ?: 0
+        if (itemCount > 0) {
+            val targetPosition = (fraction * (itemCount - 1)).toInt().coerceIn(0, itemCount - 1)
+            (binding.recyclerView.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(targetPosition, 0)
         }
     }
 

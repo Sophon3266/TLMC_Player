@@ -72,6 +72,8 @@ id editUrl
 id editUsername
 id emptyView
 id errorText
+id fastScrollThumb
+id fastScrollTrack
 id fileIcon
 id fileName
 id fileSize
