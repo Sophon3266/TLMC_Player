@@ -10,9 +10,13 @@ import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
+import kotlinx.coroutines.currentCoroutineContext
 
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
@@ -51,6 +55,7 @@ class BrowserViewModel @Inject constructor(
 
     companion object {
         private const val MAX_SEARCH_RESULTS = 200
+        private const val MAX_CONCURRENT_REQUESTS = 8
     }
 
     fun loadDirectory(path: String) {
@@ -110,49 +115,72 @@ class BrowserViewModel @Inject constructor(
 
     fun searchFiles(query: String) {
         searchJob?.cancel()
+        searchJob = null
         _searchResults.value = emptyList()
         _isSearching.value = true
         _searchStatus.value = "正在搜索..."
 
         val basePath = _currentPath.value ?: "/"
-        searchJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
             val results = mutableListOf<WebDavFile>()
+            val semaphore = Semaphore(MAX_CONCURRENT_REQUESTS)
             try {
-                searchRecursive(basePath, query.lowercase(), results)
+                searchRecursiveParallel(basePath, query.lowercase(), results, semaphore)
                 _searchStatus.value = "搜索完成，找到 ${results.size} 个结果"
             } catch (e: kotlinx.coroutines.CancellationException) {
                 _searchStatus.value = "搜索已取消，找到 ${results.size} 个结果"
                 throw e
             } catch (e: Exception) {
                 _searchStatus.value = "搜索出错: ${e.message}"
+            } finally {
+                _isSearching.value = false
             }
-            _isSearching.value = false
         }
+        searchJob = job
     }
 
-    private suspend fun searchRecursive(path: String, query: String, results: MutableList<WebDavFile>) {
+    private suspend fun searchRecursiveParallel(
+        path: String,
+        query: String,
+        results: MutableList<WebDavFile>,
+        semaphore: Semaphore
+    ) {
+        // Use currentCoroutineContext().ensureActive() to check the CURRENT coroutine's state,
+        // not the searchJob field which may point to an old cancelled job.
+        currentCoroutineContext().ensureActive()
         if (results.size >= MAX_SEARCH_RESULTS) return
 
-        // Check cancellation
-        searchJob?.ensureActive()
+        val fileList = semaphore.withPermit {
+            repository.listFiles(path).getOrNull()
+        } ?: return
 
-        val result = repository.listFiles(path)
-        result.onSuccess { files ->
-            for (file in files) {
-                searchJob?.ensureActive()
-                if (results.size >= MAX_SEARCH_RESULTS) {
-                    _searchStatus.value = "已达到最大结果数 ($MAX_SEARCH_RESULTS)"
-                    return
-                }
+        val subdirs = mutableListOf<WebDavFile>()
 
-                if (file.name.lowercase().contains(query)) {
-                    results.add(file)
-                    _searchResults.value = results.toList()
-                }
+        for (file in fileList) {
+            currentCoroutineContext().ensureActive()
+            if (results.size >= MAX_SEARCH_RESULTS) {
+                _searchStatus.value = "已达到最大结果数 ($MAX_SEARCH_RESULTS)"
+                return
+            }
 
-                if (file.isDirectory) {
-                    _searchStatus.value = "正在搜索: ${file.name} (已找到 ${results.size} 个)"
-                    searchRecursive(file.path, query, results)
+            if (file.name.lowercase().contains(query)) {
+                results.add(file)
+                _searchResults.value = results.toList()
+            }
+
+            if (file.isDirectory) {
+                subdirs.add(file)
+            }
+        }
+
+        // Search subdirectories in parallel for significant speedup
+        if (subdirs.isNotEmpty()) {
+            _searchStatus.value = "正在搜索 (已找到 ${results.size} 个)"
+            coroutineScope {
+                for (dir in subdirs) {
+                    launch {
+                        searchRecursiveParallel(dir.path, query, results, semaphore)
+                    }
                 }
             }
         }
@@ -160,6 +188,7 @@ class BrowserViewModel @Inject constructor(
 
     fun cancelSearch() {
         searchJob?.cancel()
+        searchJob = null
         _isSearching.value = false
     }
 
