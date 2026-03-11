@@ -1,0 +1,30 @@
+[
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/dialog_settings.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/dialog_settings.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_text.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_text.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/item_file.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/item_file.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/item_track.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/item_track.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_image.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_image.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_browser.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_browser.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-mergeDebugResources-44:/layout/activity_player.xml",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_player.xml"
+    }
+]

@@ -1,0 +1,94 @@
+[
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_text.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_text.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_activity_player.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_player.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_activity_text.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_text.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_music.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_music.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_file.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_file.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/menu_menu_browser.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/menu/menu_browser.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_folder.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_folder.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_settings.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_settings.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_item_file.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/item_file.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_pause.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_pause.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_image.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_image.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_play.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_play.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_bg_play_button.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/bg_play_button.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_previous.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_previous.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_activity_image.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_image.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_item_track.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/item_track.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_activity_browser.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/activity_browser.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_next.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_next.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_back.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/drawable/ic_back.xml"
+    },
+    {
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_dialog_settings.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/dialog_settings.xml"
+    }
+]
