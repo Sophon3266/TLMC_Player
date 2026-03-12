@@ -52,8 +52,12 @@ drawable ic_play
 drawable ic_playlist
 drawable ic_previous
 drawable ic_remove
+drawable ic_repeat
+drawable ic_repeat_one
 drawable ic_search
+drawable ic_sequential
 drawable ic_settings
+drawable ic_shuffle
 drawable ic_text
 id action_search
 id action_settings
@@ -63,7 +67,9 @@ id breadcrumbContainer
 id breadcrumbScroll
 id btnNavigateToFolder
 id btnNext
+id btnPlayMode
 id btnPlayPause
+id btnPlaylist
 id btnPrevious
 id btnRemoveFromPlaylist
 id currentTime
@@ -81,6 +87,7 @@ id miniPlayerArtist
 id miniPlayerCard
 id miniPlayerInfo
 id miniPlayerNext
+id miniPlayerPlayMode
 id miniPlayerPlayPause
 id miniPlayerPlaylist
 id miniPlayerPrev

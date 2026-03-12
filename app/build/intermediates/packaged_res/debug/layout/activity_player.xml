@@ -153,6 +153,15 @@
             android:padding="16dp">
 
             <ImageButton
+                android:id="@+id/btnPlayMode"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="播放模式"
+                android:src="@drawable/ic_sequential"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
                 android:id="@+id/btnPrevious"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
@@ -178,6 +187,15 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="下一曲"
                 android:src="@drawable/ic_next"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/btnPlaylist"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="播放列表"
+                android:src="@drawable/ic_playlist"
                 app:tint="?attr/colorOnSurface" />
 
         </LinearLayout>

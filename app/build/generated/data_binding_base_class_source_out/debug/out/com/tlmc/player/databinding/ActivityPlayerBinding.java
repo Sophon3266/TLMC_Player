@@ -34,7 +34,13 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final ImageButton btnNext;
 
   @NonNull
+  public final ImageButton btnPlayMode;
+
+  @NonNull
   public final ImageButton btnPlayPause;
+
+  @NonNull
+  public final ImageButton btnPlaylist;
 
   @NonNull
   public final ImageButton btnPrevious;
@@ -67,7 +73,8 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final TextView trackTitle;
 
   private ActivityPlayerBinding(@NonNull CoordinatorLayout rootView, @NonNull TextView albumArtist,
-      @NonNull TextView albumTitle, @NonNull ImageButton btnNext, @NonNull ImageButton btnPlayPause,
+      @NonNull TextView albumTitle, @NonNull ImageButton btnNext, @NonNull ImageButton btnPlayMode,
+      @NonNull ImageButton btnPlayPause, @NonNull ImageButton btnPlaylist,
       @NonNull ImageButton btnPrevious, @NonNull TextView currentTime, @NonNull TextView errorText,
       @NonNull ProgressBar progressBar, @NonNull SeekBar seekBar, @NonNull MaterialToolbar toolbar,
       @NonNull TextView totalTime, @NonNull TextView trackArtist,
@@ -76,7 +83,9 @@ public final class ActivityPlayerBinding implements ViewBinding {
     this.albumArtist = albumArtist;
     this.albumTitle = albumTitle;
     this.btnNext = btnNext;
+    this.btnPlayMode = btnPlayMode;
     this.btnPlayPause = btnPlayPause;
+    this.btnPlaylist = btnPlaylist;
     this.btnPrevious = btnPrevious;
     this.currentTime = currentTime;
     this.errorText = errorText;
@@ -134,9 +143,21 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.btnPlayMode;
+      ImageButton btnPlayMode = ViewBindings.findChildViewById(rootView, id);
+      if (btnPlayMode == null) {
+        break missingId;
+      }
+
       id = R.id.btnPlayPause;
       ImageButton btnPlayPause = ViewBindings.findChildViewById(rootView, id);
       if (btnPlayPause == null) {
+        break missingId;
+      }
+
+      id = R.id.btnPlaylist;
+      ImageButton btnPlaylist = ViewBindings.findChildViewById(rootView, id);
+      if (btnPlaylist == null) {
         break missingId;
       }
 
@@ -201,8 +222,8 @@ public final class ActivityPlayerBinding implements ViewBinding {
       }
 
       return new ActivityPlayerBinding((CoordinatorLayout) rootView, albumArtist, albumTitle,
-          btnNext, btnPlayPause, btnPrevious, currentTime, errorText, progressBar, seekBar, toolbar,
-          totalTime, trackArtist, trackRecyclerView, trackTitle);
+          btnNext, btnPlayMode, btnPlayPause, btnPlaylist, btnPrevious, currentTime, errorText,
+          progressBar, seekBar, toolbar, totalTime, trackArtist, trackRecyclerView, trackTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

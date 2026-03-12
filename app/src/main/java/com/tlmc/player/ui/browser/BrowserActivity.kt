@@ -15,6 +15,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -32,6 +33,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
+import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.data.model.ServerConfig
 import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.databinding.ActivityBrowserBinding
@@ -60,6 +62,8 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
     private var pendingMediaItem: MediaItem? = null
+    private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
+    private var isMiniPlayerSeeking = false
 
     // Search dialog references
     private var searchDialog: AlertDialog? = null
@@ -315,12 +319,105 @@ class BrowserActivity : AppCompatActivity() {
     private fun onFileClicked(file: WebDavFile) {
         when {
             file.isDirectory -> viewModel.loadDirectory(file.path)
-            file.isAudio -> openPlayer(file)
+            file.isAudio -> handleAudioFileClick(file)
             file.isCue -> openPlayerFromCue(file)
             file.isImage -> openImage(file)
             file.isText -> openText(file)
             else -> Toast.makeText(this, "不支持的文件类型: ${file.extension}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun handleAudioFileClick(file: WebDavFile) {
+        val controller = mediaController
+
+        // Check if this file is already in the playlist
+        if (controller != null && controller.mediaItemCount > 0) {
+            val fileUrl = viewModel.getFileUrl(file.path)
+            for (i in 0 until controller.mediaItemCount) {
+                val itemUri = controller.getMediaItemAt(i).localConfiguration?.uri?.toString() ?: ""
+                if (itemUri == fileUrl) {
+                    // Already in playlist, just switch to it
+                    controller.seekTo(i, 0)
+                    controller.play()
+                    updateMiniPlayerVisibility()
+                    updateMiniPlayerInfo()
+                    Toast.makeText(this, "切换到: ${file.name}", Toast.LENGTH_SHORT).show()
+                    return
+                }
+            }
+        }
+
+        // Not in playlist, ask user what to do
+        val audioFiles = viewModel.directoryFiles.value?.filter { it.isAudio } ?: emptyList()
+        if (audioFiles.size > 1) {
+            val options = arrayOf("仅播放此曲", "播放文件夹全部音频 (${audioFiles.size}首)")
+            MaterialAlertDialogBuilder(this)
+                .setTitle(file.name)
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> playSingleFile(file)
+                        1 -> playFolderAudioFiles(file, audioFiles)
+                    }
+                }
+                .show()
+        } else {
+            playSingleFile(file)
+        }
+    }
+
+    private fun playSingleFile(file: WebDavFile) {
+        val mediaItem = buildMediaItemForFile(file)
+        val controller = mediaController
+        if (controller != null) {
+            controller.addMediaItem(mediaItem)
+            val newIndex = controller.mediaItemCount - 1
+            controller.seekTo(newIndex, 0)
+            if (controller.playbackState == Player.STATE_IDLE) {
+                controller.prepare()
+            }
+            controller.play()
+            updateMiniPlayerVisibility()
+            updateMiniPlayerInfo()
+        } else {
+            pendingMediaItem = mediaItem
+            connectToPlayerService()
+        }
+    }
+
+    private fun playFolderAudioFiles(clickedFile: WebDavFile, audioFiles: List<WebDavFile>) {
+        val mediaItems = audioFiles.map { buildMediaItemForFile(it) }
+        val clickedIndex = audioFiles.indexOf(clickedFile).coerceAtLeast(0)
+
+        val controller = mediaController
+        if (controller != null) {
+            // Append all to existing playlist
+            val startIndex = controller.mediaItemCount
+            controller.addMediaItems(mediaItems)
+            controller.seekTo(startIndex + clickedIndex, 0)
+            if (controller.playbackState == Player.STATE_IDLE) {
+                controller.prepare()
+            }
+            controller.play()
+            updateMiniPlayerVisibility()
+            updateMiniPlayerInfo()
+            Toast.makeText(this, "已添加 ${audioFiles.size} 首到播放列表", Toast.LENGTH_SHORT).show()
+        } else {
+            // No controller yet; set items as pending and connect
+            pendingMediaItem = mediaItems[clickedIndex]
+            connectToPlayerService()
+        }
+    }
+
+    private fun buildMediaItemForFile(file: WebDavFile): MediaItem {
+        val url = viewModel.getFileUrl(file.path)
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(file.name)
+                    .build()
+            )
+            .build()
     }
 
     private fun onFileLongClicked(file: WebDavFile): Boolean {
@@ -333,7 +430,7 @@ class BrowserActivity : AppCompatActivity() {
                         0 -> showFileInfo(file)
                         1 -> addToPlaylist(file)
                         2 -> {
-                            if (file.isCue) openPlayerFromCue(file) else openPlayer(file)
+                            if (file.isCue) openPlayerFromCue(file) else playSingleFile(file)
                         }
                     }
                 }
@@ -353,21 +450,6 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     // ==================== Player Navigation ====================
-
-    private fun openPlayer(file: WebDavFile) {
-        val intent = Intent(this, PlayerActivity::class.java).apply {
-            putExtra(PlayerActivity.EXTRA_FILE_PATH, file.path)
-            putExtra(PlayerActivity.EXTRA_FILE_NAME, file.name)
-            putExtra(PlayerActivity.EXTRA_DIRECTORY_PATH, viewModel.currentPath.value ?: "/")
-            val matchingCue = viewModel.directoryFiles.value?.find {
-                it.isCue && it.nameWithoutExtension == file.nameWithoutExtension
-            }
-            matchingCue?.let {
-                putExtra(PlayerActivity.EXTRA_CUE_PATH, it.path)
-            }
-        }
-        startActivity(intent)
-    }
 
     private fun openPlayerFromCue(cueFile: WebDavFile) {
         val intent = Intent(this, PlayerActivity::class.java).apply {
@@ -428,6 +510,14 @@ class BrowserActivity : AppCompatActivity() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 runOnUiThread { updateMiniPlayerVisibility() }
             }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                runOnUiThread { syncPlayModeFromController() }
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                runOnUiThread { syncPlayModeFromController() }
+            }
         })
 
         // Process pending item
@@ -448,6 +538,7 @@ class BrowserActivity : AppCompatActivity() {
             updateMiniPlayerVisibility()
             updateMiniPlayerInfo()
             updateMiniPlayerControls()
+            syncPlayModeFromController()
         }
         handler.post(updateProgressRunnable)
     }
@@ -471,14 +562,38 @@ class BrowserActivity : AppCompatActivity() {
             showPlaylistDialog()
         }
 
+        binding.miniPlayerPlayMode.setOnClickListener {
+            togglePlayMode()
+        }
+
+        binding.miniPlayerProgress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                // No-op, update is handled in onStopTrackingTouch
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isMiniPlayerSeeking = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isMiniPlayerSeeking = false
+                seekBar?.let { sb ->
+                    mediaController?.let { controller ->
+                        val duration = controller.duration
+                        if (duration > 0) {
+                            val seekPosition = (sb.progress.toLong() * duration) / 1000L
+                            controller.seekTo(seekPosition)
+                        }
+                    }
+                }
+            }
+        })
+
         binding.miniPlayerInfo.setOnClickListener {
             // Tap track info area to open full PlayerActivity
             mediaController?.let { controller ->
                 if (controller.mediaItemCount > 0) {
-                    val intent = Intent(this, PlayerActivity::class.java).apply {
-                        putExtra(PlayerActivity.EXTRA_FILE_NAME,
-                            controller.currentMediaItem?.mediaMetadata?.title?.toString() ?: "")
-                    }
+                    val intent = Intent(this, PlayerActivity::class.java)
                     startActivity(intent)
                 }
             }
@@ -511,7 +626,7 @@ class BrowserActivity : AppCompatActivity() {
     private fun updateMiniPlayer() {
         val controller = mediaController ?: return
         val duration = controller.duration
-        if (duration > 0) {
+        if (duration > 0 && !isMiniPlayerSeeking) {
             val progress = (controller.currentPosition * 1000 / duration).toInt()
             binding.miniPlayerProgress.progress = progress
         }
@@ -521,15 +636,7 @@ class BrowserActivity : AppCompatActivity() {
     // ==================== Playlist Management ====================
 
     private fun addToPlaylist(file: WebDavFile) {
-        val url = viewModel.getFileUrl(file.path)
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(file.name)
-                    .build()
-            )
-            .build()
+        val mediaItem = buildMediaItemForFile(file)
 
         val controller = mediaController
         if (controller != null) {
@@ -606,6 +713,66 @@ class BrowserActivity : AppCompatActivity() {
         }
 
         (recyclerView.adapter as? BrowserPlaylistAdapter)?.submitList(items)
+    }
+
+    // ==================== Play Mode ====================
+
+    private fun togglePlayMode() {
+        currentPlayMode = currentPlayMode.next()
+        applyPlayModeToController()
+        updatePlayModeIcon()
+        val modeName = when (currentPlayMode) {
+            PlayMode.SEQUENTIAL -> "顺序播放"
+            PlayMode.REPEAT_ALL -> "列表循环"
+            PlayMode.REPEAT_ONE -> "单曲循环"
+            PlayMode.SHUFFLE -> "随机播放"
+        }
+        Toast.makeText(this, modeName, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyPlayModeToController() {
+        mediaController?.let { controller ->
+            when (currentPlayMode) {
+                PlayMode.SEQUENTIAL -> {
+                    controller.repeatMode = Player.REPEAT_MODE_OFF
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.REPEAT_ALL -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.REPEAT_ONE -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ONE
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.SHUFFLE -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                    controller.shuffleModeEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun syncPlayModeFromController() {
+        mediaController?.let { controller ->
+            currentPlayMode = when {
+                controller.shuffleModeEnabled -> PlayMode.SHUFFLE
+                controller.repeatMode == Player.REPEAT_MODE_ONE -> PlayMode.REPEAT_ONE
+                controller.repeatMode == Player.REPEAT_MODE_ALL -> PlayMode.REPEAT_ALL
+                else -> PlayMode.SEQUENTIAL
+            }
+            updatePlayModeIcon()
+        }
+    }
+
+    private fun updatePlayModeIcon() {
+        val iconRes = when (currentPlayMode) {
+            PlayMode.SEQUENTIAL -> R.drawable.ic_sequential
+            PlayMode.REPEAT_ALL -> R.drawable.ic_repeat
+            PlayMode.REPEAT_ONE -> R.drawable.ic_repeat_one
+            PlayMode.SHUFFLE -> R.drawable.ic_shuffle
+        }
+        binding.miniPlayerPlayMode.setImageResource(iconRes)
     }
 
     // ==================== Search ====================

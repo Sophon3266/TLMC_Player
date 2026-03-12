@@ -107,13 +107,18 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <ProgressBar
+            <SeekBar
                 android:id="@+id/miniPlayerProgress"
-                style="@android:style/Widget.ProgressBar.Horizontal"
                 android:layout_width="match_parent"
-                android:layout_height="2dp"
+                android:layout_height="16dp"
                 android:max="1000"
-                android:progress="0" />
+                android:progress="0"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:maxHeight="2dp"
+                android:minHeight="2dp"
+                android:thumbOffset="0dp"
+                android:thumb="@android:color/transparent" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -179,6 +184,16 @@
                     android:contentDescription="下一曲"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_next"
+                    app:tint="?attr/colorOnSurface" />
+
+                <ImageButton
+                    android:id="@+id/miniPlayerPlayMode"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="播放模式"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_sequential"
                     app:tint="?attr/colorOnSurface" />
 
                 <ImageButton

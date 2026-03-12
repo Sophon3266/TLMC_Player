@@ -8,6 +8,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -55,6 +56,9 @@ public final class ActivityBrowserBinding implements ViewBinding {
   public final ImageButton miniPlayerNext;
 
   @NonNull
+  public final ImageButton miniPlayerPlayMode;
+
+  @NonNull
   public final ImageButton miniPlayerPlayPause;
 
   @NonNull
@@ -64,7 +68,7 @@ public final class ActivityBrowserBinding implements ViewBinding {
   public final ImageButton miniPlayerPrev;
 
   @NonNull
-  public final ProgressBar miniPlayerProgress;
+  public final SeekBar miniPlayerProgress;
 
   @NonNull
   public final TextView miniPlayerTitle;
@@ -86,11 +90,11 @@ public final class ActivityBrowserBinding implements ViewBinding {
       @NonNull TextView emptyView, @NonNull View fastScrollThumb, @NonNull View fastScrollTrack,
       @NonNull TextView miniPlayerArtist, @NonNull MaterialCardView miniPlayerCard,
       @NonNull LinearLayout miniPlayerInfo, @NonNull ImageButton miniPlayerNext,
-      @NonNull ImageButton miniPlayerPlayPause, @NonNull ImageButton miniPlayerPlaylist,
-      @NonNull ImageButton miniPlayerPrev, @NonNull ProgressBar miniPlayerProgress,
-      @NonNull TextView miniPlayerTitle, @NonNull ProgressBar progressBar,
-      @NonNull RecyclerView recyclerView, @NonNull SwipeRefreshLayout swipeRefresh,
-      @NonNull MaterialToolbar toolbar) {
+      @NonNull ImageButton miniPlayerPlayMode, @NonNull ImageButton miniPlayerPlayPause,
+      @NonNull ImageButton miniPlayerPlaylist, @NonNull ImageButton miniPlayerPrev,
+      @NonNull SeekBar miniPlayerProgress, @NonNull TextView miniPlayerTitle,
+      @NonNull ProgressBar progressBar, @NonNull RecyclerView recyclerView,
+      @NonNull SwipeRefreshLayout swipeRefresh, @NonNull MaterialToolbar toolbar) {
     this.rootView = rootView;
     this.breadcrumbContainer = breadcrumbContainer;
     this.breadcrumbScroll = breadcrumbScroll;
@@ -101,6 +105,7 @@ public final class ActivityBrowserBinding implements ViewBinding {
     this.miniPlayerCard = miniPlayerCard;
     this.miniPlayerInfo = miniPlayerInfo;
     this.miniPlayerNext = miniPlayerNext;
+    this.miniPlayerPlayMode = miniPlayerPlayMode;
     this.miniPlayerPlayPause = miniPlayerPlayPause;
     this.miniPlayerPlaylist = miniPlayerPlaylist;
     this.miniPlayerPrev = miniPlayerPrev;
@@ -193,6 +198,12 @@ public final class ActivityBrowserBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.miniPlayerPlayMode;
+      ImageButton miniPlayerPlayMode = ViewBindings.findChildViewById(rootView, id);
+      if (miniPlayerPlayMode == null) {
+        break missingId;
+      }
+
       id = R.id.miniPlayerPlayPause;
       ImageButton miniPlayerPlayPause = ViewBindings.findChildViewById(rootView, id);
       if (miniPlayerPlayPause == null) {
@@ -212,7 +223,7 @@ public final class ActivityBrowserBinding implements ViewBinding {
       }
 
       id = R.id.miniPlayerProgress;
-      ProgressBar miniPlayerProgress = ViewBindings.findChildViewById(rootView, id);
+      SeekBar miniPlayerProgress = ViewBindings.findChildViewById(rootView, id);
       if (miniPlayerProgress == null) {
         break missingId;
       }
@@ -249,9 +260,9 @@ public final class ActivityBrowserBinding implements ViewBinding {
 
       return new ActivityBrowserBinding((CoordinatorLayout) rootView, breadcrumbContainer,
           breadcrumbScroll, emptyView, fastScrollThumb, fastScrollTrack, miniPlayerArtist,
-          miniPlayerCard, miniPlayerInfo, miniPlayerNext, miniPlayerPlayPause, miniPlayerPlaylist,
-          miniPlayerPrev, miniPlayerProgress, miniPlayerTitle, progressBar, recyclerView,
-          swipeRefresh, toolbar);
+          miniPlayerCard, miniPlayerInfo, miniPlayerNext, miniPlayerPlayMode, miniPlayerPlayPause,
+          miniPlayerPlaylist, miniPlayerPrev, miniPlayerProgress, miniPlayerTitle, progressBar,
+          recyclerView, swipeRefresh, toolbar);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

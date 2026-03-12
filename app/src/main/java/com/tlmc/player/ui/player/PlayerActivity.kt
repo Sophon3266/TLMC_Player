@@ -6,19 +6,24 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
-import com.tlmc.player.data.model.CueTrack
+import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.databinding.ActivityPlayerBinding
+import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
+import com.tlmc.player.ui.browser.PlaylistItem
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -37,6 +42,12 @@ class PlayerActivity : AppCompatActivity() {
     private var mediaController: MediaController? = null
     private lateinit var trackAdapter: TrackAdapter
 
+    private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
+    private var isSeeking = false
+
+    // true when opened from CUE file (needs to load & set media items)
+    private var isCueMode = false
+
     private val handler = Handler(Looper.getMainLooper())
     private val updateProgressRunnable = object : Runnable {
         override fun run() {
@@ -54,18 +65,22 @@ class PlayerActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbar.setNavigationOnClickListener { finish() }
 
-        val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
-        val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "Unknown"
         val cuePath = intent.getStringExtra(EXTRA_CUE_PATH)
-        val directoryPath = intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
+        isCueMode = cuePath != null
 
-        supportActionBar?.title = fileName
+        if (isCueMode) {
+            val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
+            val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "Unknown"
+            val directoryPath = intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
+            supportActionBar?.title = fileName
+            viewModel.initialize(filePath, cuePath, directoryPath)
+        } else {
+            supportActionBar?.title = "正在播放"
+        }
 
         setupTrackList()
         setupControls()
         observeViewModel()
-
-        viewModel.initialize(filePath, cuePath, directoryPath)
     }
 
     override fun onStart() {
@@ -107,15 +122,32 @@ class PlayerActivity : AppCompatActivity() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 runOnUiThread { updatePlaybackState(playbackState) }
             }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                runOnUiThread { syncPlayModeFromController() }
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                runOnUiThread { syncPlayModeFromController() }
+            }
         })
 
-        // If ViewModel already has media items ready, set them
-        viewModel.mediaItems.value?.let { items ->
-            if (items.isNotEmpty()) {
-                setMediaItems(items)
+        if (isCueMode) {
+            // CUE mode: if ViewModel already has media items, set them
+            viewModel.mediaItems.value?.let { items ->
+                if (items.isNotEmpty()) {
+                    setMediaItems(items)
+                }
+            }
+        } else {
+            // Pure UI mode: just read current state from controller
+            runOnUiThread {
+                updateCurrentTrackInfo()
+                mediaController?.let { updatePlayPauseButton(it.isPlaying) }
             }
         }
 
+        runOnUiThread { syncPlayModeFromController() }
         handler.post(updateProgressRunnable)
     }
 
@@ -151,6 +183,14 @@ class PlayerActivity : AppCompatActivity() {
             mediaController?.seekToNextMediaItem()
         }
 
+        binding.btnPlayMode.setOnClickListener {
+            togglePlayMode()
+        }
+
+        binding.btnPlaylist.setOnClickListener {
+            showPlaylistDialog()
+        }
+
         binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -158,9 +198,12 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isSeeking = true
+            }
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isSeeking = false
                 seekBar?.let {
                     mediaController?.seekTo(it.progress.toLong())
                 }
@@ -179,7 +222,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         viewModel.mediaItems.observe(this) { items ->
-            if (items.isNotEmpty()) {
+            if (isCueMode && items.isNotEmpty()) {
                 mediaController?.let { setMediaItems(items) }
             }
         }
@@ -218,7 +261,7 @@ class PlayerActivity : AppCompatActivity() {
         mediaController?.let { controller ->
             val position = controller.currentPosition
             val duration = controller.duration
-            if (duration > 0) {
+            if (duration > 0 && !isSeeking) {
                 binding.seekBar.max = duration.toInt()
                 binding.seekBar.progress = position.toInt()
                 binding.currentTime.text = formatTime(position)
@@ -241,7 +284,12 @@ class PlayerActivity : AppCompatActivity() {
             binding.trackTitle.text = title.ifEmpty { "Unknown" }
             binding.trackArtist.text = artist
 
-            // Highlight current track in list
+            // Update toolbar title
+            if (!isCueMode) {
+                supportActionBar?.title = title.ifEmpty { "正在播放" }
+            }
+
+            // Highlight current track in list (CUE mode)
             trackAdapter.setCurrentTrack(controller.currentMediaItemIndex)
         }
     }
@@ -252,6 +300,134 @@ class PlayerActivity : AppCompatActivity() {
             else -> binding.progressBar.visibility = View.GONE
         }
     }
+
+    // ==================== Play Mode ====================
+
+    private fun togglePlayMode() {
+        currentPlayMode = currentPlayMode.next()
+        applyPlayModeToController()
+        updatePlayModeIcon()
+        val modeName = when (currentPlayMode) {
+            PlayMode.SEQUENTIAL -> "顺序播放"
+            PlayMode.REPEAT_ALL -> "列表循环"
+            PlayMode.REPEAT_ONE -> "单曲循环"
+            PlayMode.SHUFFLE -> "随机播放"
+        }
+        Toast.makeText(this, modeName, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyPlayModeToController() {
+        mediaController?.let { controller ->
+            when (currentPlayMode) {
+                PlayMode.SEQUENTIAL -> {
+                    controller.repeatMode = Player.REPEAT_MODE_OFF
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.REPEAT_ALL -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.REPEAT_ONE -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ONE
+                    controller.shuffleModeEnabled = false
+                }
+                PlayMode.SHUFFLE -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                    controller.shuffleModeEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun syncPlayModeFromController() {
+        mediaController?.let { controller ->
+            currentPlayMode = when {
+                controller.shuffleModeEnabled -> PlayMode.SHUFFLE
+                controller.repeatMode == Player.REPEAT_MODE_ONE -> PlayMode.REPEAT_ONE
+                controller.repeatMode == Player.REPEAT_MODE_ALL -> PlayMode.REPEAT_ALL
+                else -> PlayMode.SEQUENTIAL
+            }
+            updatePlayModeIcon()
+        }
+    }
+
+    private fun updatePlayModeIcon() {
+        val iconRes = when (currentPlayMode) {
+            PlayMode.SEQUENTIAL -> R.drawable.ic_sequential
+            PlayMode.REPEAT_ALL -> R.drawable.ic_repeat
+            PlayMode.REPEAT_ONE -> R.drawable.ic_repeat_one
+            PlayMode.SHUFFLE -> R.drawable.ic_shuffle
+        }
+        binding.btnPlayMode.setImageResource(iconRes)
+    }
+
+    // ==================== Playlist Dialog ====================
+
+    private fun showPlaylistDialog() {
+        val controller = mediaController ?: return
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_playlist, null)
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.playlistRecyclerView)
+        val emptyView = dialogView.findViewById<TextView>(R.id.playlistEmpty)
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("播放列表 (${controller.mediaItemCount})")
+            .setView(dialogView)
+            .setPositiveButton("关闭", null)
+            .create()
+
+        val playlistAdapter = BrowserPlaylistAdapter(
+            onItemClick = { index ->
+                controller.seekTo(index, 0)
+                controller.play()
+                dialog.dismiss()
+            },
+            onRemoveClick = { index ->
+                controller.removeMediaItem(index)
+                refreshPlaylistDialog(controller, recyclerView, emptyView)
+                dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+            }
+        )
+
+        recyclerView.apply {
+            layoutManager = LinearLayoutManager(this@PlayerActivity)
+            adapter = playlistAdapter
+        }
+
+        refreshPlaylistDialog(controller, recyclerView, emptyView)
+        dialog.show()
+    }
+
+    private fun refreshPlaylistDialog(
+        controller: MediaController,
+        recyclerView: RecyclerView,
+        emptyView: TextView
+    ) {
+        val items = mutableListOf<PlaylistItem>()
+        for (i in 0 until controller.mediaItemCount) {
+            val mediaItem = controller.getMediaItemAt(i)
+            items.add(
+                PlaylistItem(
+                    index = i,
+                    title = mediaItem.mediaMetadata.title?.toString() ?: "未知",
+                    artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
+                    isCurrent = i == controller.currentMediaItemIndex
+                )
+            )
+        }
+
+        if (items.isEmpty()) {
+            emptyView.visibility = View.VISIBLE
+            recyclerView.visibility = View.GONE
+        } else {
+            emptyView.visibility = View.GONE
+            recyclerView.visibility = View.VISIBLE
+        }
+
+        (recyclerView.adapter as? BrowserPlaylistAdapter)?.submitList(items)
+    }
+
+    // ==================== Utility ====================
 
     private fun formatTime(ms: Long): String {
         val totalSeconds = ms / 1000
