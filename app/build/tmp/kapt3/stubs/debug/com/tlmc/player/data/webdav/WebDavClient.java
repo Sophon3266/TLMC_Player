@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserFactory;
+import com.tlmc.player.util.ChineseComparator;
 import java.io.StringReader;
 import java.net.URLDecoder;
 import java.text.SimpleDateFormat;

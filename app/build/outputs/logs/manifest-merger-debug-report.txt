@@ -99,6 +99,7 @@ ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
 application
 ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:9:5-49:19
 INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:9:5-49:19
+INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:9:5-49:19
 MERGED from [com.google.android.material:material:1.11.0] C:\Users\523szh\.gradle\caches\transforms-3\1e56a1c6a75f219b2b89a7f4375e8879\transformed\material-1.11.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.11.0] C:\Users\523szh\.gradle\caches\transforms-3\1e56a1c6a75f219b2b89a7f4375e8879\transformed\material-1.11.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\523szh\.gradle\caches\transforms-3\934f3c75c37ab2219b7b58289cdfda09\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
@@ -123,6 +124,8 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\523szh\.gradle\cac
 		ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:15:9-35
 	android:label
 		ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:13:9-41
+	android:testOnly
+		INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
 	android:roundIcon
 		ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:14:9-54
 	android:icon
@@ -183,6 +186,14 @@ action#androidx.media3.session.MediaSessionService
 ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:45:17-86
 	android:name
 		ADDED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml:45:25-83
+profileable
+INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml reason: profileable injection requested
+INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
+INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
+	android:enabled
+		INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
+	android:shell
+		INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml
 uses-sdk
 INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from D:\Documents\Android app\tlmc player\app\src\main\AndroidManifest.xml

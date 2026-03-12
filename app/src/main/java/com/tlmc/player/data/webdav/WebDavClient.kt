@@ -11,6 +11,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import com.tlmc.player.util.ChineseComparator
 import java.io.StringReader
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
@@ -66,7 +67,7 @@ class WebDavClient @Inject constructor(
 
             val body = response.body?.string() ?: return@withContext Result.success(emptyList())
             val files = parseMultiStatus(body, path)
-            Result.success(files.sortedWith(compareByDescending<WebDavFile> { it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
+            Result.success(files.sortedWith(compareByDescending<WebDavFile> { it.isDirectory }.thenBy(ChineseComparator.create()) { it.name }))
         } catch (e: Exception) {
             Result.failure(e)
         }
