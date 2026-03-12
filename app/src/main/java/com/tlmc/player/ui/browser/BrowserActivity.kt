@@ -411,6 +411,7 @@ class BrowserActivity : AppCompatActivity() {
     private fun buildMediaItemForFile(file: WebDavFile): MediaItem {
         val url = viewModel.getFileUrl(file.path)
         return MediaItem.Builder()
+            .setMediaId(file.path)
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()

@@ -12,6 +12,14 @@
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\layout\\activity_image.xml"
     },
     {
+        "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_repeat.xml.flat",
+        "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_repeat.xml"
+    },
+    {
+        "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_sequential.xml.flat",
+        "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_sequential.xml"
+    },
+    {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_file.xml.flat",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_file.xml"
     },
@@ -40,10 +48,6 @@
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_folder.xml"
     },
     {
-        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_shuffle.xml.flat",
-        "source": "com.tlmc.player.app-main-47:/drawable/ic_shuffle.xml"
-    },
-    {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_close.xml.flat",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_close.xml"
     },
@@ -54,6 +58,10 @@
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_next.xml.flat",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_next.xml"
+    },
+    {
+        "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_shuffle.xml.flat",
+        "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_shuffle.xml"
     },
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\layout_dialog_settings.xml.flat",
@@ -100,8 +108,8 @@
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\layout\\item_playlist.xml"
     },
     {
-        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_sequential.xml.flat",
-        "source": "com.tlmc.player.app-main-47:/drawable/ic_sequential.xml"
+        "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_repeat_one.xml.flat",
+        "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_repeat_one.xml"
     },
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_text.xml.flat",
@@ -144,24 +152,16 @@
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\fastscroll_track.xml"
     },
     {
-        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_repeat_one.xml.flat",
-        "source": "com.tlmc.player.app-main-47:/drawable/ic_repeat_one.xml"
-    },
-    {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_previous.xml.flat",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_previous.xml"
     },
     {
-        "merged": "com.tlmc.player.app-merged_res-45:/layout_activity_browser.xml.flat",
-        "source": "com.tlmc.player.app-main-47:/layout/activity_browser.xml"
+        "merged": "com.tlmc.player.app-merged_res-45:/layout_item_lyric_line.xml.flat",
+        "source": "com.tlmc.player.app-main-47:/layout/item_lyric_line.xml"
     },
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\drawable_ic_navigate.xml.flat",
         "source": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-main-47:\\drawable\\ic_navigate.xml"
-    },
-    {
-        "merged": "com.tlmc.player.app-merged_res-45:/drawable_ic_repeat.xml.flat",
-        "source": "com.tlmc.player.app-main-47:/drawable/ic_repeat.xml"
     },
     {
         "merged": "C:\\Users\\523szh\\.gradle\\daemon\\8.5\\com.tlmc.player.app-merged_res-45:\\layout_item_search_result.xml.flat",

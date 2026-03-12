@@ -8,6 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.tlmc.player.data.model.CueSheet
 import com.tlmc.player.data.model.CueTrack
+import com.tlmc.player.data.model.LrcLine
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,7 +38,14 @@ class PlayerViewModel @Inject constructor(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
 
+    private val _lyricsLines = MutableLiveData<List<LrcLine>>(emptyList())
+    val lyricsLines: LiveData<List<LrcLine>> = _lyricsLines
+
+    // Directory path used for finding LRC files
+    private var directoryPath: String = "/"
+
     fun initialize(filePath: String?, cuePath: String?, directoryPath: String) {
+        this.directoryPath = directoryPath
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -95,6 +103,7 @@ class PlayerViewModel @Inject constructor(
         _tracks.value = emptyList()
 
         val mediaItem = MediaItem.Builder()
+            .setMediaId(filePath)
             .setUri(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
@@ -128,6 +137,62 @@ class PlayerViewModel @Inject constructor(
 
             builder.build()
         }
+    }
+
+    /**
+     * Load lyrics for the given audio file name.
+     * Looks for a .lrc file with the same base name in the given directory.
+     */
+    fun loadLyricsForTrack(audioFileName: String, dirPath: String? = null) {
+        val dir = dirPath ?: directoryPath
+        val baseName = audioFileName.substringBeforeLast('.')
+        val lrcPath = "${dir.trimEnd('/')}/$baseName.lrc"
+
+        viewModelScope.launch {
+            try {
+                val result = repository.loadLrcFile(lrcPath)
+                result.onSuccess { lines ->
+                    _lyricsLines.value = lines
+                }.onFailure {
+                    _lyricsLines.value = emptyList()
+                }
+            } catch (_: Exception) {
+                _lyricsLines.value = emptyList()
+            }
+        }
+    }
+
+    /**
+     * Load lyrics for the current media item.
+     * Uses mediaId (original WebDAV path) to find the matching .lrc file.
+     * Falls back to directoryPath + title if mediaId is not available.
+     */
+    fun loadLyricsFromMediaItem(mediaItem: MediaItem?) {
+        if (mediaItem == null) {
+            _lyricsLines.value = emptyList()
+            return
+        }
+
+        val mediaId = mediaItem.mediaId
+        if (mediaId.isNotEmpty() && mediaId.contains('/')) {
+            // mediaId holds the original WebDAV file path, e.g. "music/album/track.flac"
+            val fileName = mediaId.substringAfterLast('/')
+            val dirPath = FileUtils.getDirectoryPath(mediaId)
+            loadLyricsForTrack(fileName, dirPath)
+        } else {
+            // Fallback: use title as file name + stored directoryPath
+            val title = mediaItem.mediaMetadata?.title?.toString()
+            if (title.isNullOrEmpty()) {
+                _lyricsLines.value = emptyList()
+                return
+            }
+            loadLyricsForTrack(title)
+        }
+    }
+
+
+    fun clearLyrics() {
+        _lyricsLines.value = emptyList()
     }
 }
 

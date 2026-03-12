@@ -20,7 +20,7 @@ data class WebDavFile(
         get() = extension in listOf("png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp")
 
     val isText: Boolean
-        get() = extension in listOf("txt", "log", "md", "nfo", "ini", "cfg")
+        get() = extension in listOf("txt", "log", "md", "nfo", "ini", "cfg", "lrc")
 
     val isCue: Boolean
         get() = extension == "cue"

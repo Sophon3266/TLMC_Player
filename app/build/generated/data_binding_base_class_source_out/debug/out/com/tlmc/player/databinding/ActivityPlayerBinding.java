@@ -52,6 +52,9 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final TextView errorText;
 
   @NonNull
+  public final RecyclerView lyricsRecyclerView;
+
+  @NonNull
   public final ProgressBar progressBar;
 
   @NonNull
@@ -76,9 +79,10 @@ public final class ActivityPlayerBinding implements ViewBinding {
       @NonNull TextView albumTitle, @NonNull ImageButton btnNext, @NonNull ImageButton btnPlayMode,
       @NonNull ImageButton btnPlayPause, @NonNull ImageButton btnPlaylist,
       @NonNull ImageButton btnPrevious, @NonNull TextView currentTime, @NonNull TextView errorText,
-      @NonNull ProgressBar progressBar, @NonNull SeekBar seekBar, @NonNull MaterialToolbar toolbar,
-      @NonNull TextView totalTime, @NonNull TextView trackArtist,
-      @NonNull RecyclerView trackRecyclerView, @NonNull TextView trackTitle) {
+      @NonNull RecyclerView lyricsRecyclerView, @NonNull ProgressBar progressBar,
+      @NonNull SeekBar seekBar, @NonNull MaterialToolbar toolbar, @NonNull TextView totalTime,
+      @NonNull TextView trackArtist, @NonNull RecyclerView trackRecyclerView,
+      @NonNull TextView trackTitle) {
     this.rootView = rootView;
     this.albumArtist = albumArtist;
     this.albumTitle = albumTitle;
@@ -89,6 +93,7 @@ public final class ActivityPlayerBinding implements ViewBinding {
     this.btnPrevious = btnPrevious;
     this.currentTime = currentTime;
     this.errorText = errorText;
+    this.lyricsRecyclerView = lyricsRecyclerView;
     this.progressBar = progressBar;
     this.seekBar = seekBar;
     this.toolbar = toolbar;
@@ -179,6 +184,12 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.lyricsRecyclerView;
+      RecyclerView lyricsRecyclerView = ViewBindings.findChildViewById(rootView, id);
+      if (lyricsRecyclerView == null) {
+        break missingId;
+      }
+
       id = R.id.progressBar;
       ProgressBar progressBar = ViewBindings.findChildViewById(rootView, id);
       if (progressBar == null) {
@@ -223,7 +234,8 @@ public final class ActivityPlayerBinding implements ViewBinding {
 
       return new ActivityPlayerBinding((CoordinatorLayout) rootView, albumArtist, albumTitle,
           btnNext, btnPlayMode, btnPlayPause, btnPlaylist, btnPrevious, currentTime, errorText,
-          progressBar, seekBar, toolbar, totalTime, trackArtist, trackRecyclerView, trackTitle);
+          lyricsRecyclerView, progressBar, seekBar, toolbar, totalTime, trackArtist,
+          trackRecyclerView, trackTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

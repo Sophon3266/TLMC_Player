@@ -3628,6 +3628,8 @@ id line3
 id linear
 id listMode
 id list_item
+id lyricText
+id lyricsRecyclerView
 id m3_side_sheet
 id marquee
 id masked
@@ -4082,6 +4084,7 @@ layout exo_track_selection_dialog
 layout ime_base_split_test_activity
 layout ime_secondary_split_test_activity
 layout item_file
+layout item_lyric_line
 layout item_playlist
 layout item_search_result
 layout item_track

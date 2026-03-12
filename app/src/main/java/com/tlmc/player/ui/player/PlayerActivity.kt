@@ -24,6 +24,7 @@ import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.databinding.ActivityPlayerBinding
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
 import com.tlmc.player.ui.browser.PlaylistItem
+import com.tlmc.player.util.LrcParser
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -41,6 +42,8 @@ class PlayerActivity : AppCompatActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private lateinit var trackAdapter: TrackAdapter
+    private lateinit var lyricsAdapter: LyricsAdapter
+    private var currentLyricsLineIndex = -1
 
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
     private var isSeeking = false
@@ -162,6 +165,19 @@ class PlayerActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@PlayerActivity)
             adapter = trackAdapter
         }
+
+        // Setup lyrics RecyclerView
+        lyricsAdapter = LyricsAdapter { lineIndex ->
+            // Click on a lyrics line to seek to that time
+            val lines = viewModel.lyricsLines.value ?: return@LyricsAdapter
+            if (lineIndex in lines.indices) {
+                mediaController?.seekTo(lines[lineIndex].timeMs)
+            }
+        }
+        binding.lyricsRecyclerView.apply {
+            layoutManager = LinearLayoutManager(this@PlayerActivity)
+            adapter = lyricsAdapter
+        }
     }
 
     private fun setupControls() {
@@ -247,6 +263,19 @@ class PlayerActivity : AppCompatActivity() {
                 binding.errorText.visibility = View.GONE
             }
         }
+
+        // Observe lyrics
+        viewModel.lyricsLines.observe(this) { lines ->
+            if (lines.isNotEmpty()) {
+                binding.lyricsRecyclerView.visibility = View.VISIBLE
+                lyricsAdapter.setLyrics(lines)
+                currentLyricsLineIndex = -1
+            } else {
+                binding.lyricsRecyclerView.visibility = View.GONE
+                lyricsAdapter.setLyrics(emptyList())
+                currentLyricsLineIndex = -1
+            }
+        }
     }
 
     private fun setMediaItems(items: List<MediaItem>) {
@@ -267,6 +296,8 @@ class PlayerActivity : AppCompatActivity() {
                 binding.currentTime.text = formatTime(position)
                 binding.totalTime.text = formatTime(duration)
             }
+            // Update lyrics highlight
+            updateLyricsPosition(position)
         }
     }
 
@@ -291,6 +322,9 @@ class PlayerActivity : AppCompatActivity() {
 
             // Highlight current track in list (CUE mode)
             trackAdapter.setCurrentTrack(controller.currentMediaItemIndex)
+
+            // Load lyrics for current track
+            viewModel.loadLyricsFromMediaItem(mediaItem)
         }
     }
 
@@ -427,6 +461,30 @@ class PlayerActivity : AppCompatActivity() {
         (recyclerView.adapter as? BrowserPlaylistAdapter)?.submitList(items)
     }
 
+    // ==================== Lyrics ====================
+
+    private fun updateLyricsPosition(positionMs: Long) {
+        val lines = viewModel.lyricsLines.value
+        if (lines.isNullOrEmpty()) return
+
+        val newIndex = LrcParser.findCurrentLineIndex(lines, positionMs)
+        if (newIndex != currentLyricsLineIndex) {
+            currentLyricsLineIndex = newIndex
+            lyricsAdapter.setCurrentLine(newIndex)
+
+            // Smooth scroll to keep the current line centered
+            if (newIndex >= 0) {
+                val layoutManager = binding.lyricsRecyclerView.layoutManager as? LinearLayoutManager
+                layoutManager?.let { lm ->
+                    // Scroll so the current line is roughly in the center of the view
+                    val recyclerHeight = binding.lyricsRecyclerView.height
+                    val offset = recyclerHeight / 2 - 40 // approximate half-line height offset
+                    lm.scrollToPositionWithOffset(newIndex, offset)
+                }
+            }
+        }
+    }
+
     // ==================== Utility ====================
 
     private fun formatTime(ms: Long): String {
@@ -436,4 +494,3 @@ class PlayerActivity : AppCompatActivity() {
         return "%02d:%02d".format(minutes, seconds)
     }
 }
-

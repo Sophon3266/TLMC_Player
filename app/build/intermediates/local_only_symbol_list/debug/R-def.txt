@@ -83,6 +83,8 @@ id fastScrollTrack
 id fileIcon
 id fileName
 id fileSize
+id lyricText
+id lyricsRecyclerView
 id miniPlayerArtist
 id miniPlayerCard
 id miniPlayerInfo
@@ -127,6 +129,7 @@ layout dialog_playlist
 layout dialog_search
 layout dialog_settings
 layout item_file
+layout item_lyric_line
 layout item_playlist
 layout item_search_result
 layout item_track
