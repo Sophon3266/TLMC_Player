@@ -1,12 +1,32 @@
+# IDE
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea
+
+# OS
 .DS_Store
-/build
-/app/build
-/captures
-.externalNativeBuild
-.cxx
+Thumbs.db
+
+# Local environment
 local.properties
+
+# Gradle / Android build outputs
+.gradle/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android package artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Signing files
+*.jks
+*.keystore
+
+# Logs and temp
+*.log
 
