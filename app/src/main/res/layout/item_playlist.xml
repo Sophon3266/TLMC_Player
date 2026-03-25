@@ -52,8 +52,7 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="移除"
         android:padding="8dp"
-        android:src="@drawable/ic_back"
-        android:rotation="180"
+        android:src="@drawable/ic_close"
         app:tint="?attr/colorOnSurfaceVariant" />
 
 </LinearLayout>
