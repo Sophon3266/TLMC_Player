@@ -612,7 +612,7 @@ public final class DaggerTLMCApplication_HiltComponents_SingletonC {
     }
 
     @Override
-    public void injectTLMCApplication(TLMCApplication tLMCApplication) {
+    public void injectTLMCApplication(TLMCApplication arg0) {
     }
 
     @Override

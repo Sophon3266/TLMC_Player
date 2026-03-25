@@ -3181,7 +3181,6 @@ drawable exo_styled_controls_subtitle_on
 drawable exo_styled_controls_vr
 drawable fastscroll_thumb
 drawable fastscroll_track
-drawable ic_add_to_playlist
 drawable ic_arrow_back_black_24
 drawable ic_back
 drawable ic_call_answer
@@ -3190,10 +3189,8 @@ drawable ic_call_answer_video
 drawable ic_call_answer_video_low
 drawable ic_call_decline
 drawable ic_call_decline_low
-drawable ic_chevron_right
 drawable ic_clear_black_24
 drawable ic_clock_black_24dp
-drawable ic_close
 drawable ic_file
 drawable ic_folder
 drawable ic_image
@@ -3207,13 +3204,11 @@ drawable ic_mtrl_chip_checked_black
 drawable ic_mtrl_chip_checked_circle
 drawable ic_mtrl_chip_close_circle
 drawable ic_music
-drawable ic_navigate
 drawable ic_next
 drawable ic_pause
 drawable ic_play
 drawable ic_playlist
 drawable ic_previous
-drawable ic_remove
 drawable ic_repeat
 drawable ic_repeat_one
 drawable ic_search
@@ -3418,7 +3413,6 @@ id btnPlayMode
 id btnPlayPause
 id btnPlaylist
 id btnPrevious
-id btnRemoveFromPlaylist
 id buttonPanel
 id cache_measures
 id callMeasure
@@ -3754,11 +3748,11 @@ id peekHeight
 id percent
 id photoView
 id pin
-id playingIndicator
+id playlistArtist
 id playlistEmpty
-id playlistItemArtist
-id playlistItemTitle
+id playlistIndex
 id playlistRecyclerView
+id playlistTitle
 id pooling_container_listener_holder_tag
 id position
 id postLayout
@@ -3770,6 +3764,7 @@ id radio
 id ratio
 id rectangles
 id recyclerView
+id removeButton
 id report_drawn
 id reverseSawtooth
 id right
