@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import com.tlmc.player.databinding.ActivityImageBinding
+import com.tlmc.player.util.TiffDecoder
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -19,6 +20,7 @@ class ImageActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityImageBinding
     private val viewModel: ImageViewModel by viewModels()
+    private var isTiffFile: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +36,7 @@ class ImageActivity : AppCompatActivity() {
             return
         }
         val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "Image"
+        isTiffFile = fileName.substringAfterLast('.', "").lowercase() in setOf("tif", "tiff")
         supportActionBar?.title = fileName
 
         observeViewModel()
@@ -45,6 +48,11 @@ class ImageActivity : AppCompatActivity() {
             bytes?.let {
                 try {
                     val bitmap = BitmapFactory.decodeByteArray(it, 0, it.size)
+                        ?: if (isTiffFile || TiffDecoder.looksLikeTiff(it)) {
+                            TiffDecoder.decode(it)
+                        } else {
+                            null
+                        }
                     if (bitmap != null) {
                         binding.photoView.setImageBitmap(bitmap)
                         binding.photoView.visibility = View.VISIBLE
