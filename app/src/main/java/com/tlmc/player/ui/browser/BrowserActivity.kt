@@ -41,6 +41,7 @@ import com.tlmc.player.ui.image.ImageActivity
 import com.tlmc.player.ui.player.PlayerActivity
 import com.tlmc.player.ui.player.PlayerService
 import com.tlmc.player.ui.text.TextActivity
+import com.tlmc.player.ui.video.VideoActivity
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -321,6 +322,7 @@ class BrowserActivity : AppCompatActivity() {
             file.isDirectory -> viewModel.loadDirectory(file.path)
             file.isAudio -> handleAudioFileClick(file)
             file.isCue -> openPlayerFromCue(file)
+            file.isVideo -> openVideo(file)
             file.isImage -> openImage(file)
             file.isText -> openText(file)
             else -> Toast.makeText(this, "不支持的文件类型: ${file.extension}", Toast.LENGTH_SHORT).show()
@@ -465,6 +467,14 @@ class BrowserActivity : AppCompatActivity() {
         val intent = Intent(this, ImageActivity::class.java).apply {
             putExtra(ImageActivity.EXTRA_FILE_PATH, file.path)
             putExtra(ImageActivity.EXTRA_FILE_NAME, file.name)
+        }
+        startActivity(intent)
+    }
+
+    private fun openVideo(file: WebDavFile) {
+        val intent = Intent(this, VideoActivity::class.java).apply {
+            putExtra(VideoActivity.EXTRA_FILE_PATH, file.path)
+            putExtra(VideoActivity.EXTRA_FILE_NAME, file.name)
         }
         startActivity(intent)
     }
