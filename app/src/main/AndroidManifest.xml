@@ -37,6 +37,12 @@
             android:name=".ui.text.TextActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.video.VideoActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
+            android:exported="false"
+            android:supportsPictureInPicture="true" />
+
         <service
             android:name=".ui.player.PlayerService"
             android:exported="true"
@@ -49,4 +55,3 @@
     </application>
 
 </manifest>
-

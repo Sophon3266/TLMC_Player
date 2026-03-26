@@ -8,6 +8,7 @@ object FileUtils {
         return when {
             file.isDirectory -> com.tlmc.player.R.drawable.ic_folder
             file.isAudio -> com.tlmc.player.R.drawable.ic_music
+            file.isVideo -> com.tlmc.player.R.drawable.ic_video
             file.isImage -> com.tlmc.player.R.drawable.ic_image
             file.isText || file.isCue -> com.tlmc.player.R.drawable.ic_text
             else -> com.tlmc.player.R.drawable.ic_file
@@ -45,6 +46,15 @@ object FileUtils {
             "ogg" -> "audio/ogg"
             "m4a" -> "audio/mp4"
             "aac" -> "audio/aac"
+            "mp4", "m4v" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            "avi" -> "video/x-msvideo"
+            "mpg", "mpeg" -> "video/mpeg"
+            "vob" -> "video/dvd"
+            "ts" -> "video/mp2t"
+            "m2ts", "mts" -> "video/mp2t"
             "png" -> "image/png"
             "jpg", "jpeg" -> "image/jpeg"
             "tif", "tiff" -> "image/tiff"
