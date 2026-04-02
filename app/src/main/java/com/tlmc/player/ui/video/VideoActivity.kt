@@ -1,6 +1,7 @@
 package com.tlmc.player.ui.video
 
 import android.app.PictureInPictureParams
+import android.content.ComponentName
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -13,6 +14,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
@@ -21,11 +24,16 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.databinding.ActivityVideoBinding
+import com.tlmc.player.ui.player.PlayerService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -46,7 +54,10 @@ class VideoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVideoBinding
     private var player: ExoPlayer? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var mediaController: MediaController? = null
     private lateinit var filePath: String
+    private var shouldResumeInternalAudio = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +78,7 @@ class VideoActivity : AppCompatActivity() {
         setupWindowInsets()
         setupSpeedControl()
         setupControllerVisibility()
+        connectToPlayerService()
         initializePlayer()
     }
 
@@ -77,6 +89,10 @@ class VideoActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         persistPlaybackPosition()
+        resumeInternalAudioIfNeeded()
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        mediaController = null
+        controllerFuture = null
         releasePlayer()
         super.onDestroy()
     }
@@ -113,9 +129,14 @@ class VideoActivity : AppCompatActivity() {
     private fun initializePlayer() {
         val dataSourceFactory = OkHttpDataSource.Factory(repository.getAuthenticatedOkHttpClient())
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(audioAttributes, true)
             .build()
             .also { exoPlayer ->
                 binding.playerView.player = exoPlayer
@@ -162,6 +183,34 @@ class VideoActivity : AppCompatActivity() {
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
             }
+    }
+
+    private fun connectToPlayerService() {
+        val sessionToken = SessionToken(this, ComponentName(this, PlayerService::class.java))
+        controllerFuture = MediaController.Builder(this, sessionToken).buildAsync().also { future ->
+            future.addListener({
+                try {
+                    val controller = future.get()
+                    mediaController = controller
+                    pauseInternalAudioIfNeeded(controller)
+                } catch (_: Exception) {
+                    mediaController = null
+                }
+            }, MoreExecutors.directExecutor())
+        }
+    }
+
+    private fun pauseInternalAudioIfNeeded(controller: MediaController) {
+        if (shouldResumeInternalAudio) return
+        if (controller.mediaItemCount == 0 || !controller.isPlaying) return
+        shouldResumeInternalAudio = true
+        controller.pause()
+    }
+
+    private fun resumeInternalAudioIfNeeded() {
+        if (!shouldResumeInternalAudio || isInPictureInPictureMode) return
+        mediaController?.takeIf { it.mediaItemCount > 0 }?.play()
+        shouldResumeInternalAudio = false
     }
 
     private fun setupControllerVisibility() {
