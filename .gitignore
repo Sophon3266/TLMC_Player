@@ -30,3 +30,6 @@ captures/
 # Logs and temp
 *.log
 
+# Project agent docs
+**/AGENTS.md
+
