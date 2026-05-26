@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:orientation="vertical"
     android:paddingTop="8dp">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/playlistRecyclerView"
         android:layout_width="match_parent"
-        android:layout_height="360dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:clipToPadding="false"
         android:paddingBottom="8dp" />
 
@@ -23,4 +25,15 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone" />
 
-</FrameLayout>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/clearPlaylistButton"
+        style="?attr/materialButtonOutlinedStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:text="清空播放列表" />
+
+</LinearLayout>

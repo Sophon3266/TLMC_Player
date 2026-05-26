@@ -5,15 +5,18 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -428,8 +431,50 @@ class PlayerActivity : AppCompatActivity() {
             adapter = playlistAdapter
         }
 
+        // 长按拖拽排序
+        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val fromPos = viewHolder.bindingAdapterPosition
+                val toPos = target.bindingAdapterPosition
+                controller.moveMediaItem(fromPos, toPos)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                // 不使用滑动删除
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                refreshPlaylistDialog(controller, recyclerView, emptyView)
+                dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+            }
+        })
+        itemTouchHelper.attachToRecyclerView(recyclerView)
+
         refreshPlaylistDialog(controller, recyclerView, emptyView)
         dialog.show()
+
+        // 清空播放列表按钮
+        val clearButton = dialogView.findViewById<Button>(R.id.clearPlaylistButton)
+        clearButton.setOnClickListener {
+            AlertDialog.Builder(this@PlayerActivity)
+                .setTitle("清空播放列表")
+                .setMessage("确定要清空全部歌曲吗？")
+                .setPositiveButton("确定") { _, _ ->
+                    controller.clearMediaItems()
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        }
     }
 
     private fun refreshPlaylistDialog(
@@ -445,7 +490,8 @@ class PlayerActivity : AppCompatActivity() {
                     index = i,
                     title = mediaItem.mediaMetadata.title?.toString() ?: "未知",
                     artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
-                    isCurrent = i == controller.currentMediaItemIndex
+                    isCurrent = i == controller.currentMediaItemIndex,
+                    mediaId = mediaItem.mediaId
                 )
             )
         }

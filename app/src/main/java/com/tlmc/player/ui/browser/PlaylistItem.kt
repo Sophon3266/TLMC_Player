@@ -4,5 +4,6 @@ data class PlaylistItem(
     val index: Int,
     val title: String,
     val artist: String,
-    val isCurrent: Boolean
+    val isCurrent: Boolean,
+    val mediaId: String
 )
