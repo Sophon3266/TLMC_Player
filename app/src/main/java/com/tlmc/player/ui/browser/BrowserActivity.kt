@@ -12,6 +12,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.Button
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ProgressBar
@@ -26,6 +27,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
@@ -697,9 +699,47 @@ class BrowserActivity : AppCompatActivity() {
             }
         )
 
-        recyclerView.apply {
+recyclerView.apply {
             layoutManager = LinearLayoutManager(this@BrowserActivity)
             adapter = playlistAdapter
+        }
+
+        val touchCallback = object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val fromPosition = viewHolder.bindingAdapterPosition
+                val toPosition = target.bindingAdapterPosition
+                controller.moveMediaItem(fromPosition, toPosition)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                refreshPlaylistDialog(controller, recyclerView, emptyView)
+            }
+        }
+        ItemTouchHelper(touchCallback).attachToRecyclerView(recyclerView)
+
+        val clearButton = dialogView.findViewById<Button>(R.id.clearPlaylistButton)
+        clearButton.setOnClickListener {
+            AlertDialog.Builder(this@BrowserActivity)
+                .setTitle("清空播放列表")
+                .setMessage("确定要清空全部歌曲吗？")
+                .setPositiveButton("确定") { _, _ ->
+                    controller.clearMediaItems()
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                    updateMiniPlayerVisibility()
+                }
+                .setNegativeButton("取消", null)
+                .show()
         }
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)
@@ -715,7 +755,8 @@ class BrowserActivity : AppCompatActivity() {
                     index = i,
                     title = mediaItem.mediaMetadata.title?.toString() ?: "未知",
                     artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
-                    isCurrent = i == controller.currentMediaItemIndex
+                    isCurrent = i == controller.currentMediaItemIndex,
+                    mediaId = mediaItem.mediaId
                 )
             )
         }

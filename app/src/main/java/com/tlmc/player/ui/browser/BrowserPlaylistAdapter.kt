@@ -52,7 +52,7 @@ class BrowserPlaylistAdapter(
 
     class PlaylistDiffCallback : DiffUtil.ItemCallback<PlaylistItem>() {
         override fun areItemsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem): Boolean {
-            return oldItem.index == newItem.index
+            return oldItem.mediaId == newItem.mediaId
         }
 
         override fun areContentsTheSame(oldItem: PlaylistItem, newItem: PlaylistItem): Boolean {
