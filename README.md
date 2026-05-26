@@ -51,27 +51,50 @@
 
 1. 克隆项目
 2. 使用 Android Studio 打开项目
-3. 等待 Gradle 同步完成
+3. 等待 Gradle 同步完成（IDE 会自动生成 `.gradle/`、`.idea/`、`local.properties`）
 4. 点击 Run 或使用 `./gradlew assembleDebug`
+
+> **注意**: 项目不包含构建产物（`.gradle/`、`app/build/`、`.idea/`、`local.properties`），首次打开项目需等待 Gradle 同步自动生成这些文件。
 
 ## 项目结构
 
 ```text
+TLMC_Player/
+├── .git/                     # 版本控制
+├── .gitignore                # 排除规则
+├── app/                      # Android 应用模块
+│   ├── build.gradle.kts      # 模块配置和依赖
+│   ├── proguard-rules.pro    # ProGuard 规则
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/tlmc/player/
+│       └── res/
+├── gradle/                   # Gradle Wrapper
+├── build.gradle.kts          # 根项目配置
+├── settings.gradle.kts       # 模块设置
+├── gradle.properties         # 全局配置
+├── gradlew / gradlew.bat     # Gradle Wrapper 脚本
+└── README.md
+```
+
+### 代码结构
+
+```text
 app/src/main/java/com/tlmc/player/
-├── TLMCApplication.kt      # Application 类
-├── di/                     # 依赖注入模块
+├── TLMCApplication.kt        # Application 类（Hilt 入口）
+├── di/                       # 依赖注入模块
 ├── data/
-│   ├── model/              # 数据模型
-│   ├── repository/         # 数据仓库
-│   └── webdav/             # WebDAV 客户端
+│   ├── model/                # 数据模型
+│   ├── repository/           # 数据仓库（ConfigManager、WebDavRepository）
+│   └── webdav/               # WebDAV 客户端
 ├── ui/
-│   ├── browser/            # 文件浏览器
-│   ├── player/             # 音频播放器
-│   ├── video/              # 视频播放器
-│   ├── image/              # 图片查看器
-│   ├── gallery/            # 图片库浏览（图片/视频混合）
-│   └── text/               # 文本查看器
-└── util/                   # 工具类
+│   ├── browser/              # 文件浏览器（启动页）
+│   ├── player/               # 音频播放器 + 后台服务
+│   ├── video/                # 视频播放器
+│   ├── image/                # 图片查看器
+│   ├── gallery/              # 图片库浏览（图片/视频混合）
+│   └── text/                 # 文本查看器
+└── util/                     # 工具类（解析器、编码检测、TIFF 解码）
 ```
 
 ## 许可证
