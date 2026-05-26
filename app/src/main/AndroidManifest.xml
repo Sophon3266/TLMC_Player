@@ -43,6 +43,10 @@
             android:exported="false"
             android:supportsPictureInPicture="true" />
 
+        <activity
+            android:name=".ui.gallery.GalleryActivity"
+            android:exported="false" />
+
         <service
             android:name=".ui.player.PlayerService"
             android:exported="true"

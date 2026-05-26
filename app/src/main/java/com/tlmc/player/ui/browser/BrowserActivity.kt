@@ -37,11 +37,10 @@ import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.data.model.ServerConfig
 import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.databinding.ActivityBrowserBinding
-import com.tlmc.player.ui.image.ImageActivity
+import com.tlmc.player.ui.gallery.GalleryActivity
 import com.tlmc.player.ui.player.PlayerActivity
 import com.tlmc.player.ui.player.PlayerService
 import com.tlmc.player.ui.text.TextActivity
-import com.tlmc.player.ui.video.VideoActivity
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -322,8 +321,7 @@ class BrowserActivity : AppCompatActivity() {
             file.isDirectory -> viewModel.loadDirectory(file.path)
             file.isAudio -> handleAudioFileClick(file)
             file.isCue -> openPlayerFromCue(file)
-            file.isVideo -> openVideo(file)
-            file.isImage -> openImage(file)
+            file.isVideo || file.isImage -> openGallery(file)
             file.isText -> openText(file)
             else -> Toast.makeText(this, "不支持的文件类型: ${file.extension}", Toast.LENGTH_SHORT).show()
         }
@@ -463,18 +461,25 @@ class BrowserActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun openImage(file: WebDavFile) {
-        val intent = Intent(this, ImageActivity::class.java).apply {
-            putExtra(ImageActivity.EXTRA_FILE_PATH, file.path)
-            putExtra(ImageActivity.EXTRA_FILE_NAME, file.name)
-        }
-        startActivity(intent)
-    }
+    private fun openGallery(file: WebDavFile) {
+        val mediaFiles = viewModel.directoryFiles.value
+            ?.filter { it.isImage || it.isVideo }
+            ?.sortedBy { it.name }
+            ?: emptyList()
 
-    private fun openVideo(file: WebDavFile) {
-        val intent = Intent(this, VideoActivity::class.java).apply {
-            putExtra(VideoActivity.EXTRA_FILE_PATH, file.path)
-            putExtra(VideoActivity.EXTRA_FILE_NAME, file.name)
+        if (mediaFiles.isEmpty()) {
+            Toast.makeText(this, "文件夹中没有媒体文件", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val paths = ArrayList(mediaFiles.map { it.path })
+        val names = ArrayList(mediaFiles.map { it.name })
+        val initialIndex = mediaFiles.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
+
+        val intent = Intent(this, GalleryActivity::class.java).apply {
+            putStringArrayListExtra(GalleryActivity.EXTRA_FILE_PATHS, paths)
+            putStringArrayListExtra(GalleryActivity.EXTRA_FILE_NAMES, names)
+            putExtra(GalleryActivity.EXTRA_INITIAL_INDEX, initialIndex)
         }
         startActivity(intent)
     }
