@@ -9,6 +9,7 @@ import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -50,6 +51,10 @@ class BrowserViewModel @Inject constructor(
 
     private val _searchStatus = MutableLiveData<String?>()
     val searchStatus: LiveData<String?> = _searchStatus
+
+    // Download
+    private val _downloadResult = MutableLiveData<Result<String>?>()
+    val downloadResult: LiveData<Result<String>?> = _downloadResult
 
     private var searchJob: Job? = null
 
@@ -193,6 +198,55 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ==================== Utility ====================
+
+    fun downloadFileToLocal(file: WebDavFile, context: android.content.Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val outputStream: java.io.OutputStream = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val contentValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Downloads.DISPLAY_NAME, file.name)
+                        put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                        put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/TLMC")
+                    }
+                    val uri = context.contentResolver.insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues
+                    ) ?: run {
+                        _downloadResult.postValue(Result.failure(Exception("无法创建下载文件")))
+                        return@launch
+                    }
+                    context.contentResolver.openOutputStream(uri)
+                        ?: run {
+                            _downloadResult.postValue(Result.failure(Exception("无法打开输出流")))
+                            return@launch
+                        }
+                } else {
+                    val dir = java.io.File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS
+                        ), "TLMC"
+                    )
+                    if (!dir.exists()) dir.mkdirs()
+                    val localFile = java.io.File(dir, file.name)
+                    java.io.FileOutputStream(localFile)
+                }
+
+                val result = repository.downloadFileToStream(file.path, outputStream)
+                outputStream.close()
+
+                result.onSuccess {
+                    _downloadResult.postValue(Result.success("Download/TLMC/${file.name}"))
+                }.onFailure { e ->
+                    _downloadResult.postValue(Result.failure(e))
+                }
+            } catch (e: Exception) {
+                _downloadResult.postValue(Result.failure(e))
+            }
+        }
+    }
+
+    fun clearDownloadResult() {
+        _downloadResult.value = null
+    }
 
     fun getFileUrl(path: String): String {
         return repository.getFileUrl(path)
