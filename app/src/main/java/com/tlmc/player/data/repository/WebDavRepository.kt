@@ -4,6 +4,7 @@ import com.tlmc.player.data.model.CueSheet
 import com.tlmc.player.data.model.LrcLine
 import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.data.webdav.WebDavClient
+import java.io.OutputStream
 import com.tlmc.player.util.CueParser
 import com.tlmc.player.util.EncodingDetector
 import com.tlmc.player.util.LrcParser
@@ -20,6 +21,10 @@ class WebDavRepository @Inject constructor(
 
     suspend fun downloadFile(path: String): Result<ByteArray> {
         return webDavClient.downloadFile(path)
+    }
+
+    suspend fun downloadFileToStream(path: String, outputStream: OutputStream): Result<Unit> {
+        return webDavClient.downloadToStream(path, outputStream)
     }
 
     suspend fun downloadTextFile(path: String): Result<String> {

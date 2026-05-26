@@ -75,6 +75,11 @@ class BrowserActivity : AppCompatActivity() {
 
     // Fast scroll
     private var isDraggingScrollbar = false
+    private var pendingDownloadFile: WebDavFile? = null
+
+    companion object {
+        private const val REQUEST_STORAGE_PERMISSION = 103
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +109,23 @@ class BrowserActivity : AppCompatActivity() {
         handler.removeCallbacks(updateProgressRunnable)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null
+    }
+
+    @Deprecated("Deprecated in API")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingDownloadFile?.let { startDownload(it) }
+            } else {
+                Toast.makeText(this, "需要存储权限才能下载文件", Toast.LENGTH_SHORT).show()
+            }
+            pendingDownloadFile = null
+        }
     }
 
     private fun requestNotificationPermission() {
@@ -243,6 +265,17 @@ class BrowserActivity : AppCompatActivity() {
         }
 
         viewModel.directoryFiles.observe(this) { /* Keep synced for CUE lookup */ }
+
+        viewModel.downloadResult.observe(this) { result ->
+            result?.let {
+                it.onSuccess { path ->
+                    Toast.makeText(this, "已下载到 $path", Toast.LENGTH_SHORT).show()
+                }.onFailure { e ->
+                    Toast.makeText(this, "下载失败: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+                viewModel.clearDownloadResult()
+            }
+        }
 
         // Search observers (always active, update dialog views if showing)
         viewModel.searchResults.observe(this) { results ->
@@ -424,8 +457,10 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun onFileLongClicked(file: WebDavFile): Boolean {
-        if (file.isAudio || file.isCue) {
-            val options = arrayOf("文件信息", "添加到播放列表", "立即播放")
+        if (file.isDirectory) {
+            showFileInfo(file)
+        } else if (file.isAudio || file.isCue) {
+            val options = arrayOf("文件信息", "添加到播放列表", "立即播放", "下载到本地")
             MaterialAlertDialogBuilder(this)
                 .setTitle(file.name)
                 .setItems(options) { _, which ->
@@ -435,13 +470,44 @@ class BrowserActivity : AppCompatActivity() {
                         2 -> {
                             if (file.isCue) openPlayerFromCue(file) else playSingleFile(file)
                         }
+                        3 -> downloadFile(file)
                     }
                 }
                 .show()
         } else {
-            showFileInfo(file)
+            val options = arrayOf("文件信息", "下载到本地")
+            MaterialAlertDialogBuilder(this)
+                .setTitle(file.name)
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> showFileInfo(file)
+                        1 -> downloadFile(file)
+                    }
+                }
+                .show()
         }
         return true
+    }
+
+    private fun downloadFile(file: WebDavFile) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                pendingDownloadFile = file
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    REQUEST_STORAGE_PERMISSION
+                )
+                return
+            }
+        }
+        startDownload(file)
+    }
+
+    private fun startDownload(file: WebDavFile) {
+        Toast.makeText(this, "正在下载 ${file.name}...", Toast.LENGTH_SHORT).show()
+        viewModel.downloadFileToLocal(file, this)
     }
 
     private fun showFileInfo(file: WebDavFile) {

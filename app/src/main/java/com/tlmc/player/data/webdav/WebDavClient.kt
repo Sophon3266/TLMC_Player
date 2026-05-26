@@ -12,6 +12,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import com.tlmc.player.util.ChineseComparator
+import java.io.OutputStream
 import java.io.StringReader
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
@@ -114,6 +115,34 @@ class WebDavClient @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun downloadToStream(path: String, outputStream: OutputStream): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val url = buildUrl(path)
+                val request = Request.Builder()
+                    .url(url)
+                    .get()
+                    .header("Authorization", getAuthHeader())
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        Exception("HTTP ${response.code}: ${response.message}")
+                    )
+                }
+
+                response.body?.byteStream()?.use { input ->
+                    outputStream.use { output ->
+                        input.copyTo(output, bufferSize = 8192)
+                    }
+                }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
     fun getAuthenticatedUrl(path: String): String {
         return buildUrl(path)
