@@ -2,7 +2,6 @@ package com.tlmc.player.ui.gallery
 
 import android.graphics.BitmapFactory
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.lifecycle.LifecycleCoroutineScope
@@ -111,8 +110,7 @@ class GalleryAdapter(
             holder.releasePlayer()
         }
         if (holder is ImageViewHolder) {
-            holder.binding.photoView.setOnMatrixChangeListener(null)
-            holder.binding.photoView.setOnTouchListener(null)
+            holder.binding.root.photoView = null
         }
     }
 
@@ -150,16 +148,8 @@ class GalleryAdapter(
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvError.visibility = View.GONE
 
-                                var isZoomed = false
-                                binding.photoView.setOnMatrixChangeListener { _ ->
-                                    isZoomed = binding.photoView.scale > binding.photoView.minimumScale + 0.01f
-                                }
-                                binding.photoView.setOnTouchListener { _, event ->
-                                    if (event.action == MotionEvent.ACTION_DOWN && isZoomed) {
-                                        (binding.root.parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(true)
-                                    }
-                                    false
-                                }
+                                // 将 PhotoView 关联到自定义容器，用于处理与 ViewPager2 的触摸冲突
+                                binding.root.photoView = binding.photoView
                             } else {
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvError.visibility = View.VISIBLE
