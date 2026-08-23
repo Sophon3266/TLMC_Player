@@ -9,6 +9,7 @@ import androidx.media3.common.MediaMetadata
 import com.tlmc.player.data.model.CueSheet
 import com.tlmc.player.data.model.CueTrack
 import com.tlmc.player.data.model.LrcLine
+import com.tlmc.player.data.model.WebDavFile
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +41,9 @@ class PlayerViewModel @Inject constructor(
 
     private val _lyricsLines = MutableLiveData<List<LrcLine>>(emptyList())
     val lyricsLines: LiveData<List<LrcLine>> = _lyricsLines
+
+    // 手动指定的歌词：key 为曲目标识（mediaId 或标题），value 为 lrc 文件路径
+    private val manualLrcOverrides = mutableMapOf<String, String>()
 
     // Directory path used for finding LRC files
     private var directoryPath: String = "/"
@@ -147,23 +151,12 @@ class PlayerViewModel @Inject constructor(
         val dir = dirPath ?: directoryPath
         val baseName = audioFileName.substringBeforeLast('.')
         val lrcPath = "${dir.trimEnd('/')}/$baseName.lrc"
-
-        viewModelScope.launch {
-            try {
-                val result = repository.loadLrcFile(lrcPath)
-                result.onSuccess { lines ->
-                    _lyricsLines.value = lines
-                }.onFailure {
-                    _lyricsLines.value = emptyList()
-                }
-            } catch (_: Exception) {
-                _lyricsLines.value = emptyList()
-            }
-        }
+        loadLrcByPath(lrcPath)
     }
 
     /**
      * Load lyrics for the current media item.
+     * Manually selected lyrics take priority over automatic matching.
      * Uses mediaId (original WebDAV path) to find the matching .lrc file.
      * Falls back to directoryPath + title if mediaId is not available.
      */
@@ -171,6 +164,14 @@ class PlayerViewModel @Inject constructor(
         if (mediaItem == null) {
             _lyricsLines.value = emptyList()
             return
+        }
+
+        // 手动指定的歌词优先于自动匹配
+        trackKeyOf(mediaItem)?.let { key ->
+            manualLrcOverrides[key]?.let { lrcPath ->
+                loadLrcByPath(lrcPath)
+                return
+            }
         }
 
         val mediaId = mediaItem.mediaId
@@ -187,6 +188,53 @@ class PlayerViewModel @Inject constructor(
                 return
             }
             loadLyricsForTrack(title)
+        }
+    }
+
+    /**
+     * 为当前曲目手动指定歌词文件；传 null 清除指定并恢复自动匹配。
+     */
+    fun setManualLrc(mediaItem: MediaItem?, lrcPath: String?) {
+        val key = trackKeyOf(mediaItem) ?: return
+        if (lrcPath == null) {
+            manualLrcOverrides.remove(key)
+        } else {
+            manualLrcOverrides[key] = lrcPath
+        }
+    }
+
+    /**
+     * 获取指定目录下的歌词文件列表，供手动选择歌词使用。
+     */
+    suspend fun listLrcFiles(dirPath: String): List<WebDavFile> {
+        val dir = dirPath.ifEmpty { "/" }
+        return repository.listFiles(dir).getOrNull()
+            ?.filter { !it.isDirectory && it.extension == "lrc" }
+            ?: emptyList()
+    }
+
+    /**
+     * 生成曲目标识：优先用 mediaId（WebDAV 路径），无 mediaId 时退回标题。
+     */
+    private fun trackKeyOf(mediaItem: MediaItem?): String? {
+        if (mediaItem == null) return null
+        val mediaId = mediaItem.mediaId
+        if (mediaId.isNotEmpty()) return mediaId
+        return mediaItem.mediaMetadata?.title?.toString()?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * 按完整 WebDAV 路径下载并加载歌词文件。
+     */
+    private fun loadLrcByPath(lrcPath: String) {
+        viewModelScope.launch {
+            try {
+                repository.loadLrcFile(lrcPath)
+                    .onSuccess { lines -> _lyricsLines.value = lines }
+                    .onFailure { _lyricsLines.value = emptyList() }
+            } catch (_: Exception) {
+                _lyricsLines.value = emptyList()
+            }
         }
     }
 

@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.SeekBar
@@ -12,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -27,8 +30,10 @@ import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.databinding.ActivityPlayerBinding
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
 import com.tlmc.player.ui.browser.PlaylistItem
+import com.tlmc.player.util.FileUtils
 import com.tlmc.player.util.LrcParser
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class PlayerActivity : AppCompatActivity() {
@@ -87,6 +92,21 @@ class PlayerActivity : AppCompatActivity() {
         setupTrackList()
         setupControls()
         observeViewModel()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_player, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_pick_lyrics -> {
+                showPickLyricsDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onStart() {
@@ -528,6 +548,57 @@ class PlayerActivity : AppCompatActivity() {
                     lm.scrollToPositionWithOffset(newIndex, offset)
                 }
             }
+        }
+    }
+
+    // ==================== Pick Lyrics ====================
+
+    /**
+     * 获取当前曲目所在目录，用于列出可选的歌词文件。
+     */
+    private fun currentTrackDirPath(): String? {
+        val mediaItem = mediaController?.currentMediaItem ?: return null
+        val mediaId = mediaItem.mediaId
+        if (mediaId.isNotEmpty() && mediaId.contains('/')) {
+            return FileUtils.getDirectoryPath(mediaId).ifEmpty { "/" }
+        }
+        // 无 mediaId（如 CUE 模式）时，退回启动时传入的目录
+        return intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
+    }
+
+    private fun showPickLyricsDialog() {
+        val mediaItem = mediaController?.currentMediaItem
+        if (mediaItem == null) {
+            Toast.makeText(this, "当前没有播放曲目", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dirPath = currentTrackDirPath() ?: return
+
+        lifecycleScope.launch {
+            val lrcFiles = viewModel.listLrcFiles(dirPath)
+            if (lrcFiles.isEmpty()) {
+                Toast.makeText(this@PlayerActivity, "当前目录没有歌词文件", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            val autoMatchLabel = "自动匹配"
+            val names = listOf(autoMatchLabel) + lrcFiles.map { it.name }
+            MaterialAlertDialogBuilder(this@PlayerActivity)
+                .setTitle("选择歌词")
+                .setItems(names.toTypedArray()) { _, which ->
+                    if (which == 0) {
+                        // 清除手动指定，恢复自动匹配
+                        viewModel.setManualLrc(mediaItem, null)
+                        viewModel.loadLyricsFromMediaItem(mediaItem)
+                        Toast.makeText(this@PlayerActivity, "已恢复自动匹配", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val file = lrcFiles[which - 1]
+                        viewModel.setManualLrc(mediaItem, file.path)
+                        viewModel.loadLyricsFromMediaItem(mediaItem)
+                        Toast.makeText(this@PlayerActivity, "已切换歌词: ${file.name}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .show()
         }
     }
 
