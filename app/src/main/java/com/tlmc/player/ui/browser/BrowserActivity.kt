@@ -78,6 +78,7 @@ class BrowserActivity : AppCompatActivity() {
     private var pendingDownloadFile: WebDavFile? = null
 
     companion object {
+        const val EXTRA_NAVIGATE_PATH = "extra_navigate_path"
         private const val REQUEST_STORAGE_PERMISSION = 103
     }
 
@@ -95,7 +96,17 @@ class BrowserActivity : AppCompatActivity() {
         requestNotificationPermission()
 
         if (savedInstanceState == null) {
-            viewModel.loadDirectory("/")
+            val navigatePath = intent.getStringExtra(EXTRA_NAVIGATE_PATH)
+            viewModel.loadDirectory(navigatePath ?: "/")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // 当 BrowserActivity 被 CLEAR_TOP+SINGLE_TOP 复用时，导航到指定目录
+        val navigatePath = intent.getStringExtra(EXTRA_NAVIGATE_PATH)
+        if (navigatePath != null) {
+            viewModel.loadDirectory(navigatePath)
         }
     }
 

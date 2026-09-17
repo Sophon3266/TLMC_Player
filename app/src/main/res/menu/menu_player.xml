@@ -7,4 +7,9 @@
         android:title="选择歌词"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_navigate_to_folder"
+        android:title="定位到文件夹"
+        app:showAsAction="never" />
+
 </menu>
