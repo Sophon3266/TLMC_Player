@@ -1,6 +1,7 @@
 package com.tlmc.player.ui.player
 
 import android.content.ComponentName
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +29,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
 import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.databinding.ActivityPlayerBinding
+import com.tlmc.player.ui.browser.BrowserActivity
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
 import com.tlmc.player.ui.browser.PlaylistItem
 import com.tlmc.player.util.FileUtils
@@ -103,6 +105,10 @@ class PlayerActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_pick_lyrics -> {
                 showPickLyricsDialog()
+                true
+            }
+            R.id.action_navigate_to_folder -> {
+                navigateToCurrentFolder()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -564,6 +570,23 @@ class PlayerActivity : AppCompatActivity() {
         }
         // 无 mediaId（如 CUE 模式）时，退回启动时传入的目录
         return intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
+    }
+
+    /**
+     * 导航至当前播放曲目所在的文件夹：
+     * 使用 CLEAR_TOP + SINGLE_TOP 复用已有的 BrowserActivity 实例。
+     */
+    private fun navigateToCurrentFolder() {
+        val dirPath = currentTrackDirPath()
+        if (dirPath == null) {
+            Toast.makeText(this, "当前没有播放曲目", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, BrowserActivity::class.java).apply {
+            putExtra(BrowserActivity.EXTRA_NAVIGATE_PATH, dirPath)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
     }
 
     private fun showPickLyricsDialog() {
