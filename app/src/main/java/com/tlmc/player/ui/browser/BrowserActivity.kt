@@ -103,6 +103,7 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         // 当 BrowserActivity 被 CLEAR_TOP+SINGLE_TOP 复用时，导航到指定目录
         val navigatePath = intent.getStringExtra(EXTRA_NAVIGATE_PATH)
         if (navigatePath != null) {
@@ -384,6 +385,9 @@ class BrowserActivity : AppCompatActivity() {
                 if (itemUri == fileUrl) {
                     // Already in playlist, just switch to it
                     controller.seekTo(i, 0)
+                    if (controller.playbackState == Player.STATE_IDLE) {
+                        controller.prepare()
+                    }
                     controller.play()
                     updateMiniPlayerVisibility()
                     updateMiniPlayerInfo()
@@ -641,16 +645,33 @@ class BrowserActivity : AppCompatActivity() {
     private fun setupMiniPlayer() {
         binding.miniPlayerPlayPause.setOnClickListener {
             mediaController?.let { controller ->
-                if (controller.isPlaying) controller.pause() else controller.play()
+                if (controller.isPlaying) {
+                    controller.pause()
+                } else {
+                    if (controller.playbackState == Player.STATE_IDLE) {
+                        controller.prepare()
+                    }
+                    controller.play()
+                }
             }
         }
 
         binding.miniPlayerPrev.setOnClickListener {
-            mediaController?.seekToPreviousMediaItem()
+            mediaController?.let { controller ->
+                controller.seekToPreviousMediaItem()
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
+            }
         }
 
         binding.miniPlayerNext.setOnClickListener {
-            mediaController?.seekToNextMediaItem()
+            mediaController?.let { controller ->
+                controller.seekToNextMediaItem()
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
+            }
         }
 
         binding.miniPlayerPlaylist.setOnClickListener {
@@ -765,6 +786,9 @@ class BrowserActivity : AppCompatActivity() {
         val playlistAdapter = BrowserPlaylistAdapter(
             onItemClick = { index ->
                 controller.seekTo(index, 0)
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
                 controller.play()
                 dialog.dismiss()
             },

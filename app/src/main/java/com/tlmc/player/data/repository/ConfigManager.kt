@@ -20,6 +20,7 @@ class ConfigManager @Inject constructor(
         private const val KEY_VIDEO_POSITION_PREFIX = "video_pos_"
         private const val KEY_AUDIO_QUEUE_STATE = "audio_queue_state"
         private const val KEY_AUDIO_POSITION_PREFIX = "audio_pos_"
+        private const val KEY_EQUALIZER_STATE = "equalizer_state"
     }
 
     data class SavedAudioItem(
@@ -30,12 +31,24 @@ class ConfigManager @Inject constructor(
         val albumTitle: String,
         val trackNumber: Int?,
         val clipStartMs: Long,
-        val clipEndMs: Long
+        val clipEndMs: Long,
+        // 曲目所在 WebDAV 目录；CUE 分轨没有 mediaId，靠它定位文件夹与歌词
+        val directoryPath: String = ""
     )
 
     data class AudioQueueState(
         val items: List<SavedAudioItem>,
         val currentIndex: Int
+    )
+
+    data class EqualizerBandState(
+        val frequencyHz: Int,
+        val levelMb: Int
+    )
+
+    data class EqualizerState(
+        val enabled: Boolean,
+        val bands: List<EqualizerBandState>
     )
 
     fun getConfig(): ServerConfig {
@@ -92,6 +105,9 @@ class ConfigManager @Inject constructor(
                         }
                         put("clipStartMs", item.clipStartMs)
                         put("clipEndMs", item.clipEndMs)
+                        if (item.directoryPath.isNotEmpty()) {
+                            put("directoryPath", item.directoryPath)
+                        }
                     })
                 }
             })
@@ -119,7 +135,8 @@ class ConfigManager @Inject constructor(
                             albumTitle = item.optString("albumTitle"),
                             trackNumber = if (item.has("trackNumber")) item.optInt("trackNumber") else null,
                             clipStartMs = item.optLong("clipStartMs", 0L).coerceAtLeast(0L),
-                            clipEndMs = item.optLong("clipEndMs", C.TIME_END_OF_SOURCE)
+                            clipEndMs = item.optLong("clipEndMs", C.TIME_END_OF_SOURCE),
+                            directoryPath = item.optString("directoryPath")
                         )
                     )
                 }
@@ -157,6 +174,47 @@ class ConfigManager @Inject constructor(
     fun clearAudioPlaybackPosition(playbackKey: String) {
         if (playbackKey.isBlank()) return
         prefs.edit().remove(audioPositionKey(playbackKey)).apply()
+    }
+
+    fun saveEqualizerState(enabled: Boolean, bands: List<EqualizerBandState>) {
+        val stateJson = JSONObject().apply {
+            put("enabled", enabled)
+            put("bands", JSONArray().apply {
+                bands.forEach { band ->
+                    put(JSONObject().apply {
+                        put("frequencyHz", band.frequencyHz)
+                        put("levelMb", band.levelMb)
+                    })
+                }
+            })
+        }.toString()
+
+        prefs.edit().putString(KEY_EQUALIZER_STATE, stateJson).apply()
+    }
+
+    fun getEqualizerState(): EqualizerState? {
+        val stateJson = prefs.getString(KEY_EQUALIZER_STATE, null) ?: return null
+        return try {
+            val root = JSONObject(stateJson)
+            val bandsJson = root.optJSONArray("bands") ?: return null
+            val bands = buildList {
+                for (index in 0 until bandsJson.length()) {
+                    val band = bandsJson.optJSONObject(index) ?: continue
+                    add(
+                        EqualizerBandState(
+                            frequencyHz = band.optInt("frequencyHz"),
+                            levelMb = band.optInt("levelMb")
+                        )
+                    )
+                }
+            }
+            EqualizerState(
+                enabled = root.optBoolean("enabled", false),
+                bands = bands
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun videoPositionKey(path: String): String {

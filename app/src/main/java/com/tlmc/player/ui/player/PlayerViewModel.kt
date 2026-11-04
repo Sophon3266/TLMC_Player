@@ -1,5 +1,6 @@
 package com.tlmc.player.ui.player
 
+import android.os.Bundle
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -20,6 +21,14 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val repository: WebDavRepository
 ) : ViewModel() {
+
+    companion object {
+        /**
+         * CUE 分轨的 MediaItem 没有 mediaId；在 metadata extras 中记录曲目所在
+         * WebDAV 目录，供“定位到文件夹”和歌词查找使用。
+         */
+        const val KEY_DIRECTORY_PATH = "tlmc_directory_path"
+    }
 
     private val _tracks = MutableLiveData<List<CueTrack>>(emptyList())
     val tracks: LiveData<List<CueTrack>> = _tracks
@@ -87,7 +96,9 @@ class PlayerViewModel @Inject constructor(
             }
 
             val audioUrl = repository.getFileUrl(audioPath)
-            val items = buildCueMediaItems(cueSheet, audioUrl)
+            // CUE 与音频通常同目录；优先用音频文件的目录，缺失时回退到 CUE 所在目录
+            val audioDirectory = FileUtils.getDirectoryPath(audioPath).ifEmpty { directoryPath }
+            val items = buildCueMediaItems(cueSheet, audioUrl, audioDirectory)
             _mediaItems.value = items
         }.onFailure { e ->
             _error.value = "CUE 解析失败: ${e.message}"
@@ -119,7 +130,11 @@ class PlayerViewModel @Inject constructor(
         _mediaItems.value = listOf(mediaItem)
     }
 
-    private fun buildCueMediaItems(cueSheet: CueSheet, audioUrl: String): List<MediaItem> {
+    private fun buildCueMediaItems(
+        cueSheet: CueSheet,
+        audioUrl: String,
+        audioDirectory: String
+    ): List<MediaItem> {
         return cueSheet.tracks.map { track ->
             val builder = MediaItem.Builder()
                 .setUri(audioUrl)
@@ -129,6 +144,9 @@ class PlayerViewModel @Inject constructor(
                         .setArtist(track.performer)
                         .setAlbumTitle(cueSheet.title)
                         .setTrackNumber(track.number)
+                        .setExtras(Bundle().apply {
+                            putString(KEY_DIRECTORY_PATH, audioDirectory)
+                        })
                         .build()
                 )
 
@@ -181,13 +199,17 @@ class PlayerViewModel @Inject constructor(
             val dirPath = FileUtils.getDirectoryPath(mediaId)
             loadLyricsForTrack(fileName, dirPath)
         } else {
+            // CUE 分轨没有 mediaId，目录来自 metadata extras
+            val extrasDir = mediaItem.mediaMetadata.extras
+                ?.getString(KEY_DIRECTORY_PATH)
+                ?.takeIf { it.isNotEmpty() }
             // Fallback: use title as file name + stored directoryPath
             val title = mediaItem.mediaMetadata?.title?.toString()
             if (title.isNullOrEmpty()) {
                 _lyricsLines.value = emptyList()
                 return
             }
-            loadLyricsForTrack(title)
+            loadLyricsForTrack(title, extrasDir)
         }
     }
 

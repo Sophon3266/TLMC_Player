@@ -8,6 +8,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_equalizer"
+        android:title="均衡器"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_navigate_to_folder"
         android:title="定位到文件夹"
         app:showAsAction="never" />

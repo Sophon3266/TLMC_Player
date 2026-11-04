@@ -9,12 +9,14 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -23,7 +25,10 @@ import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
@@ -36,6 +41,7 @@ import com.tlmc.player.util.FileUtils
 import com.tlmc.player.util.LrcParser
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class PlayerActivity : AppCompatActivity() {
@@ -49,6 +55,10 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPlayerBinding
     private val viewModel: PlayerViewModel by viewModels()
+
+    @Inject
+    lateinit var audioEqualizer: AudioEqualizer
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private lateinit var trackAdapter: TrackAdapter
@@ -57,6 +67,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
     private var isSeeking = false
+    private var eqDialog: AlertDialog? = null
 
     // true when opened from CUE file (needs to load & set media items)
     private var isCueMode = false
@@ -107,6 +118,10 @@ class PlayerActivity : AppCompatActivity() {
                 showPickLyricsDialog()
                 true
             }
+            R.id.action_equalizer -> {
+                showEqualizerDialog()
+                true
+            }
             R.id.action_navigate_to_folder -> {
                 navigateToCurrentFolder()
                 true
@@ -122,6 +137,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        eqDialog?.dismiss()
         handler.removeCallbacks(updateProgressRunnable)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null
@@ -187,6 +203,9 @@ class PlayerActivity : AppCompatActivity() {
         trackAdapter = TrackAdapter { position ->
             mediaController?.let { controller ->
                 controller.seekTo(position, 0)
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
                 controller.play()
             }
         }
@@ -215,17 +234,30 @@ class PlayerActivity : AppCompatActivity() {
                 if (controller.isPlaying) {
                     controller.pause()
                 } else {
+                    if (controller.playbackState == Player.STATE_IDLE) {
+                        controller.prepare()
+                    }
                     controller.play()
                 }
             }
         }
 
         binding.btnPrevious.setOnClickListener {
-            mediaController?.seekToPreviousMediaItem()
+            mediaController?.let { controller ->
+                controller.seekToPreviousMediaItem()
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
+            }
         }
 
         binding.btnNext.setOnClickListener {
-            mediaController?.seekToNextMediaItem()
+            mediaController?.let { controller ->
+                controller.seekToNextMediaItem()
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
+            }
         }
 
         binding.btnPlayMode.setOnClickListener {
@@ -442,6 +474,9 @@ class PlayerActivity : AppCompatActivity() {
         val playlistAdapter = BrowserPlaylistAdapter(
             onItemClick = { index ->
                 controller.seekTo(index, 0)
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.prepare()
+                }
                 controller.play()
                 dialog.dismiss()
             },
@@ -557,19 +592,175 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    // ==================== Equalizer ====================
+
+    private fun showEqualizerDialog() {
+        if (eqDialog?.isShowing == true) return
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_equalizer, null)
+        val enabledSwitch = dialogView.findViewById<MaterialSwitch>(R.id.eqEnabledSwitch)
+        val presetGroup = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.eqPresetGroup)
+        val presetScroll = dialogView.findViewById<View>(R.id.eqPresetScroll)
+        val bandsHint = dialogView.findViewById<View>(R.id.eqBandsHint)
+        val bandContainer = dialogView.findViewById<LinearLayout>(R.id.eqBandContainer)
+        val resetButton = dialogView.findViewById<MaterialButton>(R.id.eqResetButton)
+        val unavailableText = dialogView.findViewById<View>(R.id.eqUnavailableText)
+
+        var syncing = false
+        var renderedBandCount = -1
+        val presetButtons = mutableMapOf<EqualizerPreset, MaterialButton>()
+
+        presetGroup.clearChecked()
+        EqualizerPreset.values().forEach { preset ->
+            val button = MaterialButton(
+                this,
+                null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle
+            ).apply {
+                id = View.generateViewId()
+                text = preset.label
+                isSingleLine = true
+                minimumWidth = 0
+                minWidth = 0
+                tag = preset
+            }
+            presetButtons[preset] = button
+            presetGroup.addView(
+                button,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = (8 * resources.displayMetrics.density).toInt() }
+            )
+        }
+
+        fun updateAvailability(available: Boolean) {
+            enabledSwitch.isEnabled = available
+            presetScroll.visibility = if (available) View.VISIBLE else View.GONE
+            bandsHint.visibility = if (available) View.VISIBLE else View.GONE
+            bandContainer.visibility = if (available) View.VISIBLE else View.GONE
+            resetButton.isEnabled = available
+            unavailableText.visibility = if (available) View.GONE else View.VISIBLE
+        }
+
+        fun render(state: AudioEqualizer.State) {
+            updateAvailability(state.available)
+
+            syncing = true
+            enabledSwitch.isChecked = state.enabled
+            syncing = false
+
+            if (!state.available) return
+
+            if (state.bands.size != renderedBandCount) {
+                bandContainer.removeAllViews()
+                state.bands.forEach { band ->
+                    val row = layoutInflater.inflate(
+                        R.layout.item_equalizer_band,
+                        bandContainer,
+                        false
+                    )
+                    row.tag = band.index
+                    val seekBar = row.findViewById<SeekBar>(R.id.bandSeekBar)
+                    val levelText = row.findViewById<TextView>(R.id.bandLevel)
+                    seekBar.max = (band.maxLevelMb - band.minLevelMb).coerceAtLeast(1)
+                    seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(
+                            seekBar: SeekBar?,
+                            progress: Int,
+                            fromUser: Boolean
+                        ) {
+                            if (!fromUser) return
+                            val level = band.minLevelMb + progress
+                            levelText.text = formatEqLevel(level)
+                            syncing = true
+                            presetGroup.clearChecked()
+                            syncing = false
+                            audioEqualizer.setBandLevel(band.index, level)
+                        }
+
+                        override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+
+                        override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                    })
+                    bandContainer.addView(row)
+                }
+                renderedBandCount = state.bands.size
+            }
+
+            state.bands.forEachIndexed { index, band ->
+                val row = bandContainer.getChildAt(index) ?: return@forEachIndexed
+                row.findViewById<TextView>(R.id.bandFrequency).text =
+                    formatEqFrequency(band.centerFrequencyHz)
+                row.findViewById<TextView>(R.id.bandLevel).text = formatEqLevel(band.levelMb)
+                row.findViewById<SeekBar>(R.id.bandSeekBar).progress =
+                    band.levelMb - band.minLevelMb
+            }
+
+            syncing = true
+            presetGroup.clearChecked()
+            state.activePreset?.let { preset ->
+                presetButtons[preset]?.let { presetGroup.check(it.id) }
+            }
+            syncing = false
+        }
+
+        enabledSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (!syncing) {
+                audioEqualizer.setEnabled(isChecked)
+            }
+        }
+        presetGroup.addOnButtonCheckedListener { group, checkedId, isChecked ->
+            if (!isChecked || syncing) return@addOnButtonCheckedListener
+            val preset = group.findViewById<View>(checkedId)?.tag as? EqualizerPreset
+                ?: return@addOnButtonCheckedListener
+            audioEqualizer.applyPreset(preset)
+        }
+        resetButton.setOnClickListener { audioEqualizer.reset() }
+
+        val observer = Observer<AudioEqualizer.State> { state -> render(state) }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("均衡器")
+            .setView(dialogView)
+            .setPositiveButton("完成", null)
+            .create()
+
+        dialog.setOnDismissListener {
+            audioEqualizer.state.removeObserver(observer)
+            if (eqDialog === dialog) {
+                eqDialog = null
+            }
+        }
+        eqDialog = dialog
+        audioEqualizer.state.observeForever(observer)
+        audioEqualizer.state.value?.let { render(it) }
+        dialog.show()
+    }
+
     // ==================== Pick Lyrics ====================
 
     /**
-     * 获取当前曲目所在目录，用于列出可选的歌词文件。
+     * 获取当前曲目所在目录。
+     *
+     * 优先读取媒体项 metadata extras 中记录的目录（CUE 分轨没有 mediaId）；
+     * 普通单曲的 mediaId 就是 WebDAV 完整路径，直接取父目录；
+     * 最后才回退到启动 Intent 传入的目录。
      */
     private fun currentTrackDirPath(): String? {
         val mediaItem = mediaController?.currentMediaItem ?: return null
+
+        mediaItem.mediaMetadata.extras
+            ?.getString(PlayerViewModel.KEY_DIRECTORY_PATH)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+
         val mediaId = mediaItem.mediaId
         if (mediaId.isNotEmpty() && mediaId.contains('/')) {
             return FileUtils.getDirectoryPath(mediaId).ifEmpty { "/" }
         }
-        // 无 mediaId（如 CUE 模式）时，退回启动时传入的目录
-        return intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
+
+        return intent.getStringExtra(EXTRA_DIRECTORY_PATH)?.takeIf { it.isNotEmpty() }
     }
 
     /**
@@ -579,7 +770,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun navigateToCurrentFolder() {
         val dirPath = currentTrackDirPath()
         if (dirPath == null) {
-            Toast.makeText(this, "当前没有播放曲目", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "无法定位曲目所在文件夹", Toast.LENGTH_SHORT).show()
             return
         }
         val intent = Intent(this, BrowserActivity::class.java).apply {
@@ -595,7 +786,11 @@ class PlayerActivity : AppCompatActivity() {
             Toast.makeText(this, "当前没有播放曲目", Toast.LENGTH_SHORT).show()
             return
         }
-        val dirPath = currentTrackDirPath() ?: return
+        val dirPath = currentTrackDirPath()
+        if (dirPath == null) {
+            Toast.makeText(this, "无法定位曲目所在文件夹", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         lifecycleScope.launch {
             val lrcFiles = viewModel.listLrcFiles(dirPath)
@@ -626,6 +821,17 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     // ==================== Utility ====================
+
+    private fun formatEqFrequency(frequencyHz: Int): String {
+        if (frequencyHz < 1000) return "$frequencyHz Hz"
+        val khz = frequencyHz / 1000f
+        return if (khz % 1f == 0f) "${khz.toInt()} kHz" else "%.1f kHz".format(khz)
+    }
+
+    private fun formatEqLevel(levelMb: Int): String {
+        val db = levelMb / 100f
+        return if (db > 0) "+%.1f dB".format(db) else "%.1f dB".format(db)
+    }
 
     private fun formatTime(ms: Long): String {
         val totalSeconds = ms / 1000

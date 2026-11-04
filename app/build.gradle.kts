@@ -13,8 +13,8 @@ android {
         applicationId = "com.tlmc.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10006
-        versionName = "1.0.6"
+        versionCode = 10008
+        versionName = "1.0.8"
     }
 
     buildTypes {
