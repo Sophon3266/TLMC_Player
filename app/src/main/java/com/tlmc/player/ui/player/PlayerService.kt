@@ -46,10 +46,13 @@ class PlayerService : MediaSessionService() {
     lateinit var mediaCache: SimpleCache
 
     private var mediaSession: MediaSession? = null
+    private lateinit var notificationProvider: PlayerMediaNotificationProvider
     private val handler = Handler(Looper.getMainLooper())
     private val saveProgressRunnable = object : Runnable {
         override fun run() {
-            mediaSession?.player?.let { savePlaybackState(it) }
+            mediaSession?.player?.let { player ->
+                savePlaybackState(player)
+            }
             handler.postDelayed(this, SAVE_PROGRESS_INTERVAL_MS)
         }
     }
@@ -61,6 +64,9 @@ class PlayerService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+
+        notificationProvider = PlayerMediaNotificationProvider(this)
+        setMediaNotificationProvider(notificationProvider)
 
         val config = configManager.getConfig()
 
@@ -96,6 +102,8 @@ class PlayerService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             // 后台播放（息屏/切换应用）时保持 CPU 与网络唤醒
             .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setSeekBackIncrementMs(15_000L)
+            .setSeekForwardIncrementMs(30_000L)
             .build()
 
         player.addListener(object : Player.Listener {
@@ -189,10 +197,12 @@ class PlayerService : MediaSessionService() {
 
             override fun onRepeatModeChanged(repeatMode: Int) {
                 saveQueueState(player)
+                refreshNotification()
             }
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 saveQueueState(player)
+                refreshNotification()
             }
         })
 
@@ -217,6 +227,13 @@ class PlayerService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == PlayerMediaNotificationProvider.ACTION_CYCLE_PLAY_ORDER) {
+            mediaSession?.player?.let { cyclePlayOrder(it) }
+        }
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -294,10 +311,44 @@ class PlayerService : MediaSessionService() {
         }
     }
 
+    /**
+     * 主动刷新通知：播放顺序图标与播放进度不在 Media3 默认的通知刷新事件里。
+     */
+    private fun refreshNotification() {
+        val session = mediaSession ?: return
+        notificationProvider.refresh(session)
+    }
+
     private fun resetPlaybackRecovery() {
         playbackRecoveryAttempts = 0
         handler.removeCallbacks(recoveryRunnable)
         handler.removeCallbacks(bufferingWatchdog)
+    }
+
+    /**
+     * 处理通知栏“播放顺序”按钮：顺序 → 列表循环 → 单曲循环 → 随机 → 顺序。
+     */
+    private fun cyclePlayOrder(player: Player) {
+        try {
+            when {
+                player.shuffleModeEnabled -> {
+                    player.shuffleModeEnabled = false
+                    player.repeatMode = Player.REPEAT_MODE_OFF
+                }
+                player.repeatMode == Player.REPEAT_MODE_ONE -> {
+                    player.shuffleModeEnabled = true
+                    player.repeatMode = Player.REPEAT_MODE_ALL
+                }
+                player.repeatMode == Player.REPEAT_MODE_ALL -> {
+                    player.repeatMode = Player.REPEAT_MODE_ONE
+                }
+                else -> {
+                    player.repeatMode = Player.REPEAT_MODE_ALL
+                }
+            }
+        } catch (_: Exception) {
+            // 忽略不支持该命令的播放器状态
+        }
     }
 
     private fun savePlaybackState(player: Player) {

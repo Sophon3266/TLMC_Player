@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TLMC Player</string>
+    <string name="media_notification_channel_name">播放控制</string>
 </resources>
 

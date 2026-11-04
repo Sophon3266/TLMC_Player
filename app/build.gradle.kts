@@ -13,8 +13,8 @@ android {
         applicationId = "com.tlmc.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10008
-        versionName = "1.0.8"
+        versionCode = 10009
+        versionName = "1.0.9"
     }
 
     buildTypes {
@@ -70,6 +70,7 @@ dependencies {
     implementation("androidx.media3:media3-session:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.2.1")
+    implementation("androidx.media:media:1.6.0")
 
     // Image loading - Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")

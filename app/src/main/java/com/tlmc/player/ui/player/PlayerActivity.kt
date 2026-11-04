@@ -22,7 +22,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -484,6 +483,20 @@ class PlayerActivity : AppCompatActivity() {
                 controller.removeMediaItem(index)
                 refreshPlaylistDialog(controller, recyclerView, emptyView)
                 dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+            },
+            onMoveUp = { index ->
+                if (index > 0) {
+                    controller.moveMediaItem(index, index - 1)
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                }
+            },
+            onMoveDown = { index ->
+                if (index < controller.mediaItemCount - 1) {
+                    controller.moveMediaItem(index, index + 1)
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                }
             }
         )
 
@@ -491,33 +504,6 @@ class PlayerActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@PlayerActivity)
             adapter = playlistAdapter
         }
-
-        // 长按拖拽排序
-        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
-        ) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                val fromPos = viewHolder.bindingAdapterPosition
-                val toPos = target.bindingAdapterPosition
-                controller.moveMediaItem(fromPos, toPos)
-                return true
-            }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                // 不使用滑动删除
-            }
-
-            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-                super.clearView(recyclerView, viewHolder)
-                refreshPlaylistDialog(controller, recyclerView, emptyView)
-                dialog.setTitle("播放列表 (${controller.mediaItemCount})")
-            }
-        })
-        itemTouchHelper.attachToRecyclerView(recyclerView)
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)
         dialog.show()
@@ -543,16 +529,23 @@ class PlayerActivity : AppCompatActivity() {
         recyclerView: RecyclerView,
         emptyView: TextView
     ) {
+        val itemCount = controller.mediaItemCount
         val items = mutableListOf<PlaylistItem>()
-        for (i in 0 until controller.mediaItemCount) {
+        for (i in 0 until itemCount) {
             val mediaItem = controller.getMediaItemAt(i)
+            val clip = mediaItem.clippingConfiguration
+            val itemKey = mediaItem.mediaId.ifEmpty {
+                "${mediaItem.localConfiguration?.uri}|${clip.startPositionMs}|${clip.endPositionMs}|${mediaItem.mediaMetadata.title}"
+            }
             items.add(
                 PlaylistItem(
                     index = i,
                     title = mediaItem.mediaMetadata.title?.toString() ?: "未知",
                     artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
                     isCurrent = i == controller.currentMediaItemIndex,
-                    mediaId = mediaItem.mediaId
+                    mediaId = itemKey,
+                    canMoveUp = i > 0,
+                    canMoveDown = i < itemCount - 1
                 )
             )
         }

@@ -27,7 +27,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
@@ -797,36 +796,27 @@ class BrowserActivity : AppCompatActivity() {
                 refreshPlaylistDialog(controller, recyclerView, emptyView)
                 dialog.setTitle("播放列表 (${controller.mediaItemCount})")
                 updateMiniPlayerVisibility()
+            },
+            onMoveUp = { index ->
+                if (index > 0) {
+                    controller.moveMediaItem(index, index - 1)
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                }
+            },
+            onMoveDown = { index ->
+                if (index < controller.mediaItemCount - 1) {
+                    controller.moveMediaItem(index, index + 1)
+                    refreshPlaylistDialog(controller, recyclerView, emptyView)
+                    dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+                }
             }
         )
 
-recyclerView.apply {
+        recyclerView.apply {
             layoutManager = LinearLayoutManager(this@BrowserActivity)
             adapter = playlistAdapter
         }
-
-        val touchCallback = object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
-        ) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                val fromPosition = viewHolder.bindingAdapterPosition
-                val toPosition = target.bindingAdapterPosition
-                controller.moveMediaItem(fromPosition, toPosition)
-                return true
-            }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-                super.clearView(recyclerView, viewHolder)
-                refreshPlaylistDialog(controller, recyclerView, emptyView)
-            }
-        }
-        ItemTouchHelper(touchCallback).attachToRecyclerView(recyclerView)
 
         val clearButton = dialogView.findViewById<Button>(R.id.clearPlaylistButton)
         clearButton.setOnClickListener {
@@ -848,16 +838,23 @@ recyclerView.apply {
     }
 
     private fun refreshPlaylistDialog(controller: MediaController, recyclerView: RecyclerView, emptyView: TextView) {
+        val itemCount = controller.mediaItemCount
         val items = mutableListOf<PlaylistItem>()
-        for (i in 0 until controller.mediaItemCount) {
+        for (i in 0 until itemCount) {
             val mediaItem = controller.getMediaItemAt(i)
+            val clip = mediaItem.clippingConfiguration
+            val itemKey = mediaItem.mediaId.ifEmpty {
+                "${mediaItem.localConfiguration?.uri}|${clip.startPositionMs}|${clip.endPositionMs}|${mediaItem.mediaMetadata.title}"
+            }
             items.add(
                 PlaylistItem(
                     index = i,
                     title = mediaItem.mediaMetadata.title?.toString() ?: "未知",
                     artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
                     isCurrent = i == controller.currentMediaItemIndex,
-                    mediaId = mediaItem.mediaId
+                    mediaId = itemKey,
+                    canMoveUp = i > 0,
+                    canMoveDown = i < itemCount - 1
                 )
             )
         }

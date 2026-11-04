@@ -5,5 +5,7 @@ data class PlaylistItem(
     val title: String,
     val artist: String,
     val isCurrent: Boolean,
-    val mediaId: String
+    val mediaId: String,
+    val canMoveUp: Boolean,
+    val canMoveDown: Boolean
 )

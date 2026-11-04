@@ -11,7 +11,9 @@ import com.tlmc.player.databinding.ItemPlaylistBinding
 
 class BrowserPlaylistAdapter(
     private val onItemClick: (Int) -> Unit,
-    private val onRemoveClick: (Int) -> Unit
+    private val onRemoveClick: (Int) -> Unit,
+    private val onMoveUp: (Int) -> Unit,
+    private val onMoveDown: (Int) -> Unit
 ) : ListAdapter<PlaylistItem, BrowserPlaylistAdapter.PlaylistViewHolder>(PlaylistDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {
@@ -47,6 +49,18 @@ class BrowserPlaylistAdapter(
 
             binding.root.setOnClickListener { onItemClick(item.index) }
             binding.removeButton.setOnClickListener { onRemoveClick(item.index) }
+
+            binding.moveUpButton.isEnabled = item.canMoveUp
+            binding.moveUpButton.alpha = if (item.canMoveUp) 1f else 0.3f
+            binding.moveUpButton.setOnClickListener {
+                if (item.canMoveUp) onMoveUp(item.index)
+            }
+
+            binding.moveDownButton.isEnabled = item.canMoveDown
+            binding.moveDownButton.alpha = if (item.canMoveDown) 1f else 0.3f
+            binding.moveDownButton.setOnClickListener {
+                if (item.canMoveDown) onMoveDown(item.index)
+            }
         }
     }
 
