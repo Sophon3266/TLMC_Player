@@ -13,6 +13,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -89,7 +90,9 @@ class PlayerService : MediaSessionService() {
             .setUpstreamDataSourceFactory(upstreamFactory)
             // 缓存异常时回退到网络，避免影响播放
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        val mediaSourceFactory = DefaultMediaSourceFactory(cacheDataSourceFactory)
+        // 让本地 content:// 与 file:// 也能播放；http(s) 继续走缓存 + WebDAV 认证
+        val dataSourceFactory = DefaultDataSource.Factory(this, cacheDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)

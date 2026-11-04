@@ -193,6 +193,10 @@ class PlayerViewModel @Inject constructor(
         }
 
         val mediaId = mediaItem.mediaId
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            _lyricsLines.value = emptyList()
+            return
+        }
         if (mediaId.isNotEmpty() && mediaId.contains('/')) {
             // mediaId holds the original WebDAV file path, e.g. "music/album/track.flac"
             val fileName = mediaId.substringAfterLast('/')

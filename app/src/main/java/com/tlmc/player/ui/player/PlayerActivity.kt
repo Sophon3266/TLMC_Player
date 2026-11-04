@@ -749,6 +749,10 @@ class PlayerActivity : AppCompatActivity() {
             ?.let { return it }
 
         val mediaId = mediaItem.mediaId
+        // 本地 content:// 文件不属于 WebDAV 目录，无法定位
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            return null
+        }
         if (mediaId.isNotEmpty() && mediaId.contains('/')) {
             return FileUtils.getDirectoryPath(mediaId).ifEmpty { "/" }
         }

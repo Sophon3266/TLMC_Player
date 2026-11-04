@@ -2,6 +2,8 @@ package com.tlmc.player.ui.browser
 
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -19,6 +21,7 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -63,7 +66,12 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
     private var pendingMediaItem: MediaItem? = null
+    private var pendingLocalMediaItems: List<MediaItem> = emptyList()
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
+
+    private val openLocalAudio = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> handleLocalAudioSelected(uris) }
     private var isMiniPlayerSeeking = false
 
     // Search dialog references
@@ -632,6 +640,14 @@ class BrowserActivity : AppCompatActivity() {
             pendingMediaItem = null
         }
 
+        if (pendingLocalMediaItems.isNotEmpty()) {
+            val items = pendingLocalMediaItems
+            pendingLocalMediaItems = emptyList()
+            runOnUiThread {
+                mediaController?.let { playLocalMediaItems(it, items) }
+            }
+        }
+
         runOnUiThread {
             updateMiniPlayerVisibility()
             updateMiniPlayerInfo()
@@ -767,6 +783,82 @@ class BrowserActivity : AppCompatActivity() {
             connectToPlayerService()
             Toast.makeText(this, "正在连接播放器...", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // ==================== Local Audio ====================
+
+    private fun handleLocalAudioSelected(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
+        val items = uris.map { uri ->
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // 某些文件提供方不支持持久化授权，本次会话内仍可播放
+            }
+            buildLocalMediaItem(uri)
+        }
+
+        val controller = mediaController
+        if (controller == null) {
+            pendingLocalMediaItems = pendingLocalMediaItems + items
+            connectToPlayerService()
+            Toast.makeText(this, "正在连接播放器...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        playLocalMediaItems(controller, items)
+    }
+
+    private fun buildLocalMediaItem(uri: Uri): MediaItem {
+        val displayName = queryDisplayName(uri)
+            ?: uri.lastPathSegment
+            ?: "本地音频"
+        return MediaItem.Builder()
+            .setMediaId(uri.toString())
+            .setUri(uri)
+            .setMimeType(
+                contentResolver.getType(uri)?.takeIf { it.startsWith("audio/") }
+            )
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(displayName)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun playLocalMediaItems(controller: MediaController, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        val startIndex = controller.mediaItemCount
+        controller.addMediaItems(items)
+        controller.seekTo(startIndex, 0)
+        if (controller.playbackState == Player.STATE_IDLE) {
+            controller.prepare()
+        }
+        controller.play()
+        updateMiniPlayerVisibility()
+        updateMiniPlayerInfo()
+        Toast.makeText(this, "已添加 ${items.size} 个本地音频", Toast.LENGTH_SHORT).show()
     }
 
     private fun showPlaylistDialog() {
@@ -1014,6 +1106,10 @@ class BrowserActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_search -> {
                 showSearchDialog()
+                true
+            }
+            R.id.action_open_local -> {
+                openLocalAudio.launch(arrayOf("audio/*"))
                 true
             }
             R.id.action_settings -> {
