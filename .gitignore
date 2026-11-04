@@ -13,6 +13,7 @@ local.properties
 .gradle/
 build/
 **/build/
+app/release/
 captures/
 .externalNativeBuild/
 .cxx/
