@@ -13,9 +13,6 @@ data class WebDavFile(
     companion object {
         private val AUDIO_EXTENSIONS = setOf("flac", "mp3", "wav", "ogg", "m4a", "aac")
         private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp")
-        private val VIDEO_EXTENSIONS = setOf(
-            "mp4", "mkv", "webm", "mov", "avi", "m4v", "mpg", "mpeg", "vob", "ts", "m2ts", "mts"
-        )
         private val TEXT_EXTENSIONS = setOf("txt", "log", "md", "nfo", "ini", "cfg", "lrc")
     }
 
@@ -27,9 +24,6 @@ data class WebDavFile(
 
     val isImage: Boolean
         get() = extension in IMAGE_EXTENSIONS
-
-    val isVideo: Boolean
-        get() = extension in VIDEO_EXTENSIONS
 
     val isText: Boolean
         get() = extension in TEXT_EXTENSIONS

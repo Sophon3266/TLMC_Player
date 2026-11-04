@@ -42,12 +42,6 @@
             android:exported="false" />
 
         <activity
-            android:name=".ui.video.VideoActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
-            android:exported="false"
-            android:supportsPictureInPicture="true" />
-
-        <activity
             android:name=".ui.gallery.GalleryActivity"
             android:exported="false" />
 

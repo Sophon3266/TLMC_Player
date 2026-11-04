@@ -9,7 +9,6 @@ import androidx.viewpager2.widget.ViewPager2
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.databinding.ActivityGalleryBinding
 import dagger.hilt.android.AndroidEntryPoint
-import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -24,22 +23,14 @@ class GalleryActivity : AppCompatActivity() {
     @Inject
     lateinit var repository: WebDavRepository
 
-    @Inject
-    lateinit var okHttpClient: OkHttpClient
-
     private lateinit var binding: ActivityGalleryBinding
     private val viewModel: GalleryViewModel by viewModels()
     private lateinit var adapter: GalleryAdapter
     private var initialIndex = 0
-    private val playbackPositions = mutableMapOf<String, Long>()
 
     private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
-        private var previousPosition = -1
-
         override fun onPageSelected(position: Int) {
             super.onPageSelected(position)
-            adapter.onPageChanged(previousPosition, position)
-            previousPosition = position
             val realPosition = adapter.getRealPosition(position)
             viewModel.updateIndex(realPosition)
         }
@@ -64,7 +55,7 @@ class GalleryActivity : AppCompatActivity() {
         }
 
         if (paths.isEmpty()) {
-            Toast.makeText(this, "没有可浏览的媒体文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "没有可浏览的图片", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -76,7 +67,7 @@ class GalleryActivity : AppCompatActivity() {
         val displayName = names.getOrElse(initialIndex) { paths[initialIndex].substringAfterLast('/') }
         supportActionBar?.title = displayName
 
-        adapter = GalleryAdapter(repository, okHttpClient, lifecycleScope, playbackPositions)
+        adapter = GalleryAdapter(repository, lifecycleScope)
         binding.viewPager2.offscreenPageLimit = 1
         binding.viewPager2.adapter = adapter
         binding.viewPager2.registerOnPageChangeCallback(pageChangeCallback)

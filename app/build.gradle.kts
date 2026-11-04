@@ -13,8 +13,8 @@ android {
         applicationId = "com.tlmc.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10100
-        versionName = "1.1.0"
+        versionCode = 10009
+        versionName = "1.0.9"
     }
 
     buildTypes {
@@ -68,7 +68,6 @@ dependencies {
     // Media3 ExoPlayer
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-session:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.2.1")
     implementation("androidx.media:media:1.6.0")
 
