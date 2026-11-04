@@ -45,6 +45,7 @@ import com.tlmc.player.ui.gallery.GalleryActivity
 import com.tlmc.player.ui.player.PlayerActivity
 import com.tlmc.player.ui.player.PlayerService
 import com.tlmc.player.ui.text.TextActivity
+import com.tlmc.player.util.ArtworkUtils
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -613,6 +614,10 @@ class BrowserActivity : AppCompatActivity() {
                 runOnUiThread { updateMiniPlayerInfo() }
             }
 
+            override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                runOnUiThread { updateMiniPlayerInfo() }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 runOnUiThread { updateMiniPlayerVisibility() }
             }
@@ -745,6 +750,15 @@ class BrowserActivity : AppCompatActivity() {
         val mediaItem = controller.currentMediaItem
         binding.miniPlayerTitle.text = mediaItem?.mediaMetadata?.title?.toString() ?: "未知曲目"
         binding.miniPlayerArtist.text = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
+
+        val artwork = ArtworkUtils.decodeArtwork(mediaItem?.mediaMetadata?.artworkData)
+        if (artwork != null) {
+            binding.miniPlayerArtwork.setImageBitmap(artwork)
+            binding.miniPlayerArtwork.visibility = View.VISIBLE
+        } else {
+            binding.miniPlayerArtwork.setImageDrawable(null)
+            binding.miniPlayerArtwork.visibility = View.GONE
+        }
     }
 
     private fun updateMiniPlayerControls() {

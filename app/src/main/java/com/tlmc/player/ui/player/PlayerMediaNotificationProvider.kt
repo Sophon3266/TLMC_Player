@@ -9,6 +9,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Parcelable
+import android.view.View
+import android.widget.RemoteViews
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -21,14 +23,16 @@ import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.tlmc.player.R
+import com.tlmc.player.util.ArtworkUtils
 
 /**
  * 播放通知：在默认 Media3 通知基础上补充：
  * - 锁屏公开可见的独立通知渠道、标题/艺术家/专辑与大图标
+ * - 自定义通知布局（含进度条，解决 MediaStyle 不渲染 setProgress 的问题）
  * - 播放顺序（顺序/列表循环/单曲循环/随机）切换按钮
- * - 通过标准 MediaStyle + MediaSession 暴露系统可拖动的进度条
  *
- * 播放顺序变化时通过 [refresh] 重建通知以立即更新按钮图标。
+ * 通知中的进度与播放顺序图标通过 [refresh] 主动重建并更新，避免 Media3 默认只在
+ * 播放状态/元数据变化时才刷新通知的问题。
  */
 @OptIn(UnstableApi::class)
 class PlayerMediaNotificationProvider(
@@ -44,6 +48,8 @@ class PlayerMediaNotificationProvider(
 
     private var lastSession: MediaSession? = null
     private var lastActionFactory: MediaNotification.ActionFactory? = null
+    private var cachedArtworkData: ByteArray? = null
+    private var cachedArtworkBitmap: Bitmap? = null
 
     private val fallbackLargeIcon: Bitmap by lazy(LazyThreadSafetyMode.NONE) {
         val size = (48 * appContext.resources.displayMetrics.density).toInt().coerceAtLeast(48)
@@ -118,12 +124,25 @@ class PlayerMediaNotificationProvider(
         val player = mediaSession.player
         applyProgress(builder, player)
 
+        val artwork = if (player.isCommandAvailable(Player.COMMAND_GET_METADATA)) {
+            artworkBitmap(player.mediaMetadata.artworkData)
+        } else {
+            null
+        }
         builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         builder.setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-        builder.setLargeIcon(fallbackLargeIcon)
+        builder.setLargeIcon(artwork ?: fallbackLargeIcon)
         if (player.isCommandAvailable(Player.COMMAND_GET_METADATA)) {
             player.mediaMetadata.albumTitle?.let { builder.setSubText(it) }
         }
+
+        val views = buildCustomViews(
+            mediaSession,
+            actionFactory,
+            player
+        )
+        builder.setCustomContentView(views)
+        builder.setCustomBigContentView(views)
 
         val compactViewIndices = super.addNotificationActions(
             mediaSession,
@@ -142,7 +161,7 @@ class PlayerMediaNotificationProvider(
     }
 
     /**
-     * 主动重建并更新通知：用于播放顺序切换后立即刷新按钮图标。
+     * 主动重建并更新通知：用于播放顺序切换（图标）和播放中的进度刷新。
      */
     fun refresh(session: MediaSession) {
         val actionFactory = lastActionFactory ?: return
@@ -173,6 +192,7 @@ class PlayerMediaNotificationProvider(
         } else {
             null
         }
+        val views = buildCustomViews(session, actionFactory, player)
         val showPause = player.playWhenReady && player.playbackState != Player.STATE_ENDED
 
         val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
@@ -186,18 +206,18 @@ class PlayerMediaNotificationProvider(
                     ?: ""
             )
             .setSubText(metadata?.albumTitle?.toString())
-            .setLargeIcon(fallbackLargeIcon)
+            .setLargeIcon(
+                artworkBitmap(metadata?.artworkData) ?: fallbackLargeIcon
+            )
             .setContentIntent(session.sessionActivity)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setOnlyAlertOnce(true)
             .setOngoing(false)
             .setShowWhen(false)
-            .setStyle(
-                MediaStyle()
-                    .setMediaSession(session.getSessionCompatToken())
-                    .setShowActionsInCompactView(0, 1, 2)
-            )
+            .setCustomContentView(views)
+            .setCustomBigContentView(views)
+            .setStyle(MediaStyle().setShowActionsInCompactView(0, 1, 2))
 
         applyProgress(builder, player)
 
@@ -247,6 +267,77 @@ class PlayerMediaNotificationProvider(
         return notification
     }
 
+    private fun buildCustomViews(
+        session: MediaSession,
+        actionFactory: MediaNotification.ActionFactory,
+        player: Player
+    ): RemoteViews {
+        val views = RemoteViews(appContext.packageName, R.layout.notification_media_custom)
+
+        val metadata = if (player.isCommandAvailable(Player.COMMAND_GET_METADATA)) {
+            player.mediaMetadata
+        } else {
+            null
+        }
+        views.setTextViewText(
+            R.id.notificationTitle,
+            metadata?.title?.toString()?.ifEmpty { "未知曲目" } ?: "未知曲目"
+        )
+        views.setTextViewText(
+            R.id.notificationArtist,
+            metadata?.artist?.toString()
+                ?: metadata?.albumTitle?.toString()
+                ?: ""
+        )
+        views.setImageViewBitmap(
+            R.id.notificationArtwork,
+            artworkBitmap(metadata?.artworkData) ?: fallbackLargeIcon
+        )
+
+        val duration = player.duration
+        if (duration > 0L) {
+            val progress = (player.currentPosition.coerceIn(0L, duration) * 1000L / duration)
+                .toInt()
+                .coerceIn(0, 1000)
+            views.setProgressBar(R.id.notificationProgress, 1000, progress, false)
+            views.setViewVisibility(R.id.notificationProgress, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.notificationProgress, View.GONE)
+        }
+
+        val showPause = player.playWhenReady && player.playbackState != Player.STATE_ENDED
+        views.setImageViewResource(
+            R.id.notificationPlayPause,
+            if (showPause) R.drawable.ic_pause else R.drawable.ic_play
+        )
+        views.setImageViewResource(R.id.notificationOrder, orderIconRes(player))
+
+        views.setOnClickPendingIntent(
+            R.id.notificationPrev,
+            actionFactory.createMediaActionPendingIntent(
+                session,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM.toLong()
+            )
+        )
+        views.setOnClickPendingIntent(
+            R.id.notificationPlayPause,
+            actionFactory.createMediaActionPendingIntent(
+                session,
+                Player.COMMAND_PLAY_PAUSE.toLong()
+            )
+        )
+        views.setOnClickPendingIntent(
+            R.id.notificationNext,
+            actionFactory.createMediaActionPendingIntent(
+                session,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM.toLong()
+            )
+        )
+        views.setOnClickPendingIntent(R.id.notificationOrder, playOrderPendingIntent())
+
+        return views
+    }
+
     private fun applyProgress(builder: NotificationCompat.Builder, player: Player) {
         val duration = player.duration
         if (duration <= 0L) return
@@ -256,6 +347,15 @@ class PlayerMediaNotificationProvider(
             .coerceAtMost(max.toLong())
             .toInt()
         builder.setProgress(max, position, false)
+    }
+
+    private fun artworkBitmap(data: ByteArray?): Bitmap? {
+        if (data == null) return null
+        if (data === cachedArtworkData) return cachedArtworkBitmap
+        val bitmap = ArtworkUtils.decodeArtwork(data)
+        cachedArtworkData = data
+        cachedArtworkBitmap = bitmap
+        return bitmap
     }
 
     private fun playerButton(

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 播放通知自定义布局（夜间） -->
+    <color name="notification_text_primary">#FFFFFFFF</color>
+    <color name="notification_text_secondary">#B3FFFFFF</color>
+    <color name="notification_icon_tint">#FFFFFFFF</color>
+    <color name="notification_progress_tint">#FFFFFFFF</color>
+    <color name="notification_progress_background">#33FFFFFF</color>
+</resources>

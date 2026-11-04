@@ -2,6 +2,8 @@ package com.tlmc.player.ui.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,12 +24,20 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.tlmc.player.data.repository.ConfigManager
+import com.tlmc.player.data.repository.WebDavRepository
+import com.tlmc.player.util.FileUtils
 import com.tlmc.player.ui.browser.BrowserActivity
 import com.tlmc.player.data.model.ServerConfig
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 import javax.inject.Inject
 
 @OptIn(UnstableApi::class)
@@ -46,13 +56,24 @@ class PlayerService : MediaSessionService() {
     @Inject
     lateinit var mediaCache: SimpleCache
 
+    @Inject
+    lateinit var repository: WebDavRepository
+
     private var mediaSession: MediaSession? = null
     private lateinit var notificationProvider: PlayerMediaNotificationProvider
+    private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val artworkCache = HashMap<String, ByteArray?>()
+    private val artworkLoading = HashSet<String>()
+    private val coverNames = setOf("cover", "folder", "front", "album", "albumart", "artwork")
     private val handler = Handler(Looper.getMainLooper())
     private val saveProgressRunnable = object : Runnable {
         override fun run() {
             mediaSession?.player?.let { player ->
                 savePlaybackState(player)
+                // 播放中定期刷新通知进度（Media3 默认通知不会随位置持续更新）
+                if (player.isPlaying) {
+                    refreshNotification()
+                }
             }
             handler.postDelayed(this, SAVE_PROGRESS_INTERVAL_MS)
         }
@@ -131,6 +152,7 @@ class PlayerService : MediaSessionService() {
                     scheduleBufferingWatchdog()
                 }
                 savePlaybackState(player)
+                requestArtwork(player)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -173,6 +195,7 @@ class PlayerService : MediaSessionService() {
                         // AudioTrack 已就绪，此时绑定均衡器才能生效
                         audioEqualizer.attach(player.audioSessionId)
                         resetPlaybackRecovery()
+                        requestArtwork(player)
                     }
                     Player.STATE_BUFFERING -> {
                         // 切轨/网络波动时通常几秒；超时仍未恢复则重建播放源
@@ -247,6 +270,7 @@ class PlayerService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        artworkScope.cancel()
         handler.removeCallbacks(saveProgressRunnable)
         handler.removeCallbacks(recoveryRunnable)
         handler.removeCallbacks(bufferingWatchdog)
@@ -351,6 +375,128 @@ class PlayerService : MediaSessionService() {
             }
         } catch (_: Exception) {
             // 忽略不支持该命令的播放器状态
+        }
+    }
+
+    // ==================== Artwork ====================
+
+    /**
+     * 为当前曲目补充封面：
+     * - 本地 content/file：读取音频内嵌封面；
+     * - WebDAV / CUE：查找同目录 cover/folder/front/album 图片。
+     */
+    private fun requestArtwork(player: Player) {
+        val index = player.currentMediaItemIndex
+        val mediaItem = player.currentMediaItem ?: return
+        if (mediaItem.mediaMetadata.artworkData != null) return
+        val key = artworkKey(mediaItem) ?: return
+
+        var shouldLoad = false
+        var cached: ByteArray? = null
+        synchronized(artworkCache) {
+            if (artworkCache.containsKey(key)) {
+                cached = artworkCache[key]
+            } else if (artworkLoading.add(key)) {
+                shouldLoad = true
+            }
+        }
+
+        if (!shouldLoad) {
+            cached?.let { applyArtwork(player, index, key, it) }
+            return
+        }
+
+        artworkScope.launch {
+            val bytes = try {
+                loadArtwork(mediaItem, key)
+            } catch (_: Exception) {
+                null
+            }
+            handler.post {
+                synchronized(artworkCache) {
+                    artworkCache[key] = bytes
+                    artworkLoading.remove(key)
+                }
+                if (bytes != null) {
+                    val currentPlayer = mediaSession?.player ?: return@post
+                    applyArtwork(currentPlayer, index, key, bytes)
+                }
+            }
+        }
+    }
+
+    private fun artworkKey(mediaItem: MediaItem): String? {
+        val mediaId = mediaItem.mediaId
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            return "local:$mediaId"
+        }
+        val directory = if (mediaId.isNotEmpty() && mediaId.contains('/')) {
+            FileUtils.getDirectoryPath(mediaId)
+        } else {
+            mediaItem.mediaMetadata.extras
+                ?.getString(PlayerViewModel.KEY_DIRECTORY_PATH)
+                .orEmpty()
+        }
+        return directory.takeIf { it.isNotEmpty() }?.let { "remote:$it" }
+    }
+
+    private suspend fun loadArtwork(mediaItem: MediaItem, key: String): ByteArray? {
+        val mediaId = mediaItem.mediaId
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            return extractEmbeddedArtwork(Uri.parse(mediaId))
+        }
+        return loadRemoteCover(key.removePrefix("remote:"))
+    }
+
+    private fun extractEmbeddedArtwork(uri: Uri): ByteArray? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(this, uri)
+            retriever.embeddedPicture
+        } catch (_: Exception) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {
+                // 忽略
+            }
+        }
+    }
+
+    private suspend fun loadRemoteCover(directory: String): ByteArray? {
+        val files = repository.listFiles(directory).getOrNull() ?: return null
+        val cover = files
+            .filter {
+                it.isImage &&
+                    it.nameWithoutExtension.lowercase(Locale.ROOT) in coverNames
+            }
+            .sortedBy { it.name.lowercase(Locale.ROOT) }
+            .firstOrNull() ?: return null
+        return repository.downloadFile(cover.path).getOrNull()
+    }
+
+    private fun applyArtwork(
+        player: Player,
+        mediaItemIndex: Int,
+        key: String,
+        bytes: ByteArray
+    ) {
+        if (player.currentMediaItemIndex != mediaItemIndex) return
+        val mediaItem = player.currentMediaItem ?: return
+        if (artworkKey(mediaItem) != key) return
+        if (mediaItem.mediaMetadata.artworkData != null) return
+
+        val metadata = mediaItem.mediaMetadata.buildUpon()
+            .setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            .build()
+        val updated = mediaItem.buildUpon()
+            .setMediaMetadata(metadata)
+            .build()
+        try {
+            player.replaceMediaItem(mediaItemIndex, updated)
+        } catch (_: Exception) {
+            // 封面更新失败不影响播放
         }
     }
 

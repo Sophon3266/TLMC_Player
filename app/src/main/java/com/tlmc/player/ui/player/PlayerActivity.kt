@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -36,6 +37,7 @@ import com.tlmc.player.databinding.ActivityPlayerBinding
 import com.tlmc.player.ui.browser.BrowserActivity
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
 import com.tlmc.player.ui.browser.PlaylistItem
+import com.tlmc.player.util.ArtworkUtils
 import com.tlmc.player.util.FileUtils
 import com.tlmc.player.util.LrcParser
 import dagger.hilt.android.AndroidEntryPoint
@@ -163,6 +165,10 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                runOnUiThread { updateCurrentTrackInfo() }
+            }
+
+            override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 runOnUiThread { updateCurrentTrackInfo() }
             }
 
@@ -374,6 +380,15 @@ class PlayerActivity : AppCompatActivity() {
             val artist = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
             binding.trackTitle.text = title.ifEmpty { "Unknown" }
             binding.trackArtist.text = artist
+
+            val artwork = ArtworkUtils.decodeArtwork(mediaItem?.mediaMetadata?.artworkData)
+            if (artwork != null) {
+                binding.albumArtwork.setImageBitmap(artwork)
+                binding.albumArtwork.visibility = View.VISIBLE
+            } else {
+                binding.albumArtwork.setImageDrawable(null)
+                binding.albumArtwork.visibility = View.GONE
+            }
 
             // Update toolbar title
             if (!isCueMode) {
