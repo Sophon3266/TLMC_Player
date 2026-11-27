@@ -35,9 +35,31 @@ class LibraryGalleryAdapter(
     private val onItemLongClick: (LibraryGalleryItem, Int) -> Boolean
 ) : ListAdapter<LibraryGalleryItem, LibraryGalleryAdapter.CardViewHolder>(DiffCallback()) {
 
+    companion object {
+        private const val VIEW_TYPE_LIST = 0
+        private const val VIEW_TYPE_GRID = 1
+    }
+
+    var isGridMode: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
+
+    override fun getItemViewType(position: Int): Int {
+        return if (isGridMode) VIEW_TYPE_GRID else VIEW_TYPE_LIST
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CardViewHolder {
+        val layoutRes = if (viewType == VIEW_TYPE_GRID) {
+            R.layout.item_library_gallery_card
+        } else {
+            R.layout.item_library_list
+        }
         val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_library_gallery_card, parent, false)
+            .inflate(layoutRes, parent, false)
         return CardViewHolder(view)
     }
 

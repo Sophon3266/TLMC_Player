@@ -15,6 +15,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import com.google.common.util.concurrent.ListenableFuture
@@ -22,6 +23,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
 import com.tlmc.player.data.model.CustomPlaylist
 import com.tlmc.player.data.model.TrackRecord
+import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.data.repository.OfflineManager
 import com.tlmc.player.databinding.ActivityLibraryBinding
@@ -54,6 +56,9 @@ class LibraryActivity : AppCompatActivity() {
 
     @Inject
     lateinit var folderCoverLoader: FolderCoverLoader
+
+    @Inject
+    lateinit var configManager: ConfigManager
 
     private lateinit var binding: ActivityLibraryBinding
     private lateinit var adapter: LibraryGalleryAdapter
@@ -92,13 +97,24 @@ class LibraryActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        val isGrid = configManager.isLibraryGridView()
+        menu.add(0, 1002, 0, "切换视图")
+            .setIcon(if (isGrid) R.drawable.ic_view_list else R.drawable.ic_view_grid)
+            .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
         if (currentTab == TAB_HISTORY) {
-            menu.add(0, 1001, 0, "清空历史").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(0, 1001, 1, "清空历史").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
         }
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == 1002) {
+            val nextGrid = !configManager.isLibraryGridView()
+            configManager.setLibraryGridView(nextGrid)
+            applyViewMode(nextGrid)
+            invalidateOptionsMenu()
+            return true
+        }
         if (item.itemId == 1001 && currentTab == TAB_HISTORY) {
             MaterialAlertDialogBuilder(this)
                 .setTitle("清空播放历史")
@@ -144,9 +160,18 @@ class LibraryActivity : AppCompatActivity() {
             onItemClick = { item, position -> handleCardClick(item, position) },
             onItemLongClick = { item, position -> handleCardLongClick(item, position) }
         )
-        val spanCount = if (resources.configuration.screenWidthDp >= 600) 3 else 2
-        binding.galleryRecyclerView.layoutManager = GridLayoutManager(this, spanCount)
+        applyViewMode(configManager.isLibraryGridView())
         binding.galleryRecyclerView.adapter = adapter
+    }
+
+    private fun applyViewMode(isGrid: Boolean) {
+        adapter.isGridMode = isGrid
+        binding.galleryRecyclerView.layoutManager = if (isGrid) {
+            val spanCount = if (resources.configuration.screenWidthDp >= 600) 3 else 2
+            GridLayoutManager(this, spanCount)
+        } else {
+            LinearLayoutManager(this)
+        }
     }
 
     private fun setupFab() {

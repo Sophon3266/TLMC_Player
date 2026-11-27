@@ -22,6 +22,7 @@ class ConfigManager @Inject constructor(
         private const val KEY_EQUALIZER_STATE = "equalizer_state"
         private const val KEY_PARALLEL_AUDIO_PLAYBACK = "parallel_audio_playback"
         private const val KEY_GRID_VIEW = "browser_grid_view"
+        private const val KEY_LIBRARY_GRID_VIEW = "library_grid_view"
     }
 
     data class SavedAudioItem(
@@ -219,6 +220,14 @@ class ConfigManager @Inject constructor(
 
     fun setGridView(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_GRID_VIEW, enabled).apply()
+    }
+
+    fun isLibraryGridView(): Boolean {
+        return prefs.getBoolean(KEY_LIBRARY_GRID_VIEW, true)
+    }
+
+    fun setLibraryGridView(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LIBRARY_GRID_VIEW, enabled).apply()
     }
 
     private fun audioPositionKey(playbackKey: String): String {
