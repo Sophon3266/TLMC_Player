@@ -46,8 +46,31 @@ object DownloadNotificationHelper {
             .setSilent(true)
             .setProgress(max, progress, indeterminate)
             .setContentIntent(createContentIntent(context))
+            .addAction(
+                0,
+                "取消",
+                createCancelIntent(context, notificationId)
+            )
 
         manager.notify(notificationId, builder.build())
+    }
+
+    fun cancel(context: Context, notificationId: Int) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.cancel(notificationId)
+    }
+
+    private fun createCancelIntent(context: Context, notificationId: Int): PendingIntent {
+        val intent = Intent(context, DownloadCancelReceiver::class.java).apply {
+            action = DownloadCancelReceiver.ACTION_CANCEL_DOWNLOAD
+            putExtra(DownloadCancelReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
     }
 
     fun showCompleted(

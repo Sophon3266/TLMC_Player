@@ -23,6 +23,7 @@ class ConfigManager @Inject constructor(
         private const val KEY_PARALLEL_AUDIO_PLAYBACK = "parallel_audio_playback"
         private const val KEY_GRID_VIEW = "browser_grid_view"
         private const val KEY_LIBRARY_GRID_VIEW = "library_grid_view"
+        private const val KEY_OFFLINE_DIR_PATH = "offline_dir_path"
     }
 
     data class SavedAudioItem(
@@ -228,6 +229,19 @@ class ConfigManager @Inject constructor(
 
     fun setLibraryGridView(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_LIBRARY_GRID_VIEW, enabled).apply()
+    }
+
+    fun getOfflineDirPath(): String? {
+        return prefs.getString(KEY_OFFLINE_DIR_PATH, null)?.takeIf { it.isNotBlank() }
+    }
+
+    fun setOfflineDirPath(path: String?) {
+        val trimmed = path?.trim().orEmpty()
+        if (trimmed.isEmpty()) {
+            prefs.edit().remove(KEY_OFFLINE_DIR_PATH).apply()
+        } else {
+            prefs.edit().putString(KEY_OFFLINE_DIR_PATH, trimmed).apply()
+        }
     }
 
     private fun audioPositionKey(playbackKey: String): String {

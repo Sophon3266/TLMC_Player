@@ -49,6 +49,10 @@
             android:name=".ui.library.LibraryActivity"
             android:exported="false" />
 
+        <receiver
+            android:name=".util.DownloadCancelReceiver"
+            android:exported="false" />
+
         <service
             android:name=".ui.player.PlayerService"
             android:exported="true"

@@ -8,6 +8,30 @@ import androidx.media3.common.MediaMetadata
 import org.json.JSONArray
 import org.json.JSONObject
 
+fun CueSheet.toTrackRecords(
+    audioUri: String,
+    keyPrefix: String,
+    directoryPath: String = "",
+    fallbackAlbumTitle: String = ""
+): List<TrackRecord> {
+    val album = title.ifEmpty { fallbackAlbumTitle }
+    return tracks.map { track ->
+        val endMs = if (track.endTimeMs > 0) track.endTimeMs else C.TIME_END_OF_SOURCE
+        TrackRecord(
+            key = "$keyPrefix|${track.startTimeMs}|$endMs",
+            mediaId = "",
+            uri = audioUri,
+            title = track.title.ifEmpty { "Track %02d".format(track.number) },
+            artist = track.performer.ifEmpty { performer },
+            albumTitle = album,
+            trackNumber = track.number,
+            clipStartMs = track.startTimeMs.coerceAtLeast(0L),
+            clipEndMs = endMs,
+            directoryPath = directoryPath
+        )
+    }
+}
+
 /**
  * 可序列化的曲目记录，用于红心收藏、自定义歌单与播放历史。
  */

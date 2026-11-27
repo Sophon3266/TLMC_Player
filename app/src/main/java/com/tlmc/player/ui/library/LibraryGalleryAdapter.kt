@@ -1,8 +1,10 @@
 package com.tlmc.player.ui.library
 
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.DrawableRes
@@ -22,9 +24,12 @@ data class LibraryGalleryItem(
     val title: String,
     val subtitle: String,
     val badge: String = "",
-    val localCoverFile: File? = null,
+    val localCoverUri: Uri? = null,
     val remoteDirectoryPath: String = "",
     @DrawableRes val placeholderIconRes: Int = R.drawable.ic_music,
+    val showManageControls: Boolean = false,
+    val canMoveUp: Boolean = false,
+    val canMoveDown: Boolean = false,
     val payload: Any? = null
 )
 
@@ -32,7 +37,10 @@ class LibraryGalleryAdapter(
     private val folderCoverLoader: FolderCoverLoader,
     private val coroutineScope: CoroutineScope,
     private val onItemClick: (LibraryGalleryItem, Int) -> Unit,
-    private val onItemLongClick: (LibraryGalleryItem, Int) -> Boolean
+    private val onItemLongClick: (LibraryGalleryItem, Int) -> Boolean,
+    private val onMoveUp: ((LibraryGalleryItem, Int) -> Unit)? = null,
+    private val onMoveDown: ((LibraryGalleryItem, Int) -> Unit)? = null,
+    private val onRemoveClick: ((LibraryGalleryItem, Int) -> Unit)? = null
 ) : ListAdapter<LibraryGalleryItem, LibraryGalleryAdapter.CardViewHolder>(DiffCallback()) {
 
     companion object {
@@ -78,6 +86,9 @@ class LibraryGalleryAdapter(
         private val badgeText: TextView = itemView.findViewById(R.id.cardBadge)
         private val titleText: TextView = itemView.findViewById(R.id.cardTitle)
         private val subtitleText: TextView = itemView.findViewById(R.id.cardSubtitle)
+        private val moveUpButton: ImageButton? = itemView.findViewById(R.id.moveUpButton)
+        private val moveDownButton: ImageButton? = itemView.findViewById(R.id.moveDownButton)
+        private val removeButton: ImageButton? = itemView.findViewById(R.id.removeButton)
         private var coverJob: Job? = null
 
         fun cancelCoverJob() {
@@ -95,11 +106,45 @@ class LibraryGalleryAdapter(
             placeholderIcon.visibility = View.VISIBLE
             coverImage.visibility = View.GONE
 
-            if (item.badge.isNotEmpty()) {
+            if (item.badge.isNotEmpty() && !(moveUpButton != null && item.showManageControls)) {
                 badgeText.text = item.badge
                 badgeText.visibility = View.VISIBLE
             } else {
                 badgeText.visibility = View.GONE
+            }
+
+            if (moveUpButton != null && moveDownButton != null && removeButton != null) {
+                val visible = item.showManageControls
+                val vis = if (visible) View.VISIBLE else View.GONE
+                moveUpButton.visibility = vis
+                moveDownButton.visibility = vis
+                removeButton.visibility = vis
+                if (visible) {
+                    moveUpButton.isEnabled = item.canMoveUp
+                    moveUpButton.alpha = if (item.canMoveUp) 1f else 0.3f
+                    moveUpButton.setOnClickListener {
+                        val pos = bindingAdapterPosition
+                        if (pos != RecyclerView.NO_POSITION && item.canMoveUp) {
+                            onMoveUp?.invoke(item, pos)
+                        }
+                    }
+
+                    moveDownButton.isEnabled = item.canMoveDown
+                    moveDownButton.alpha = if (item.canMoveDown) 1f else 0.3f
+                    moveDownButton.setOnClickListener {
+                        val pos = bindingAdapterPosition
+                        if (pos != RecyclerView.NO_POSITION && item.canMoveDown) {
+                            onMoveDown?.invoke(item, pos)
+                        }
+                    }
+
+                    removeButton.setOnClickListener {
+                        val pos = bindingAdapterPosition
+                        if (pos != RecyclerView.NO_POSITION) {
+                            onRemoveClick?.invoke(item, pos)
+                        }
+                    }
+                }
             }
 
             itemView.setOnClickListener {
@@ -117,8 +162,8 @@ class LibraryGalleryAdapter(
                 }
             }
 
-            val localCover = item.localCoverFile
-            if (localCover != null && localCover.exists()) {
+            val localCover = item.localCoverUri
+            if (localCover != null) {
                 coverImage.visibility = View.VISIBLE
                 placeholderIcon.visibility = View.GONE
                 Glide.with(coverImage)

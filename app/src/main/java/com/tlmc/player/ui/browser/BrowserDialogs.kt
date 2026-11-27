@@ -295,15 +295,17 @@ private fun BrowserActivity.showOfflineAlbumDetailDialog(album: OfflineManager.O
         .show()
 }
 
-private fun BrowserActivity.playOfflineFiles(files: List<File>, startIndex: Int) {
+private fun BrowserActivity.playOfflineFiles(
+    files: List<OfflineManager.OfflineFileItem>,
+    startIndex: Int
+) {
     val items = files.map { file ->
         MediaItem.Builder()
-            .setMediaId(file.absolutePath)
-            .setUri(Uri.fromFile(file))
+            .setMediaId(file.uri.toString())
+            .setUri(file.uri)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(file.nameWithoutExtension)
-                    .setAlbumTitle(file.parentFile?.name ?: "")
                     .build()
             )
             .build()

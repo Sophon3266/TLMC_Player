@@ -80,6 +80,40 @@
             android:textSize="11sp"
             android:visibility="gone" />
 
+        <ImageButton
+            android:id="@+id/moveUpButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="上移"
+            android:padding="6dp"
+            android:src="@drawable/ic_arrow_up"
+            android:visibility="gone"
+            app:tint="?attr/colorOnSurfaceVariant" />
+
+        <ImageButton
+            android:id="@+id/moveDownButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="下移"
+            android:padding="6dp"
+            android:src="@drawable/ic_arrow_down"
+            android:visibility="gone"
+            app:tint="?attr/colorOnSurfaceVariant" />
+
+        <ImageButton
+            android:id="@+id/removeButton"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="删除"
+            android:padding="6dp"
+            android:src="@drawable/ic_close"
+            android:visibility="gone"
+            app:tint="?attr/colorOnSurfaceVariant" />
+
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

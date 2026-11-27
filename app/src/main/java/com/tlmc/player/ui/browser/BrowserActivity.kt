@@ -79,6 +79,25 @@ class BrowserActivity : AppCompatActivity() {
     lateinit var folderCoverLoader: FolderCoverLoader
 
     private var lastDownloadActive = false
+    private var pendingOfflinePathText: TextView? = null
+
+    private val openOfflineTree = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // 忽略部分提供方不支持持久化权限
+            }
+            migrateAndSwitchOfflineLocation(uri.toString()) {
+                pendingOfflinePathText?.text = offlineManager.getOfflineLocationDisplay()
+            }
+        }
+    }
 
     // Mini Player
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -1347,12 +1366,16 @@ class BrowserActivity : AppCompatActivity() {
         val usernameEdit = dialogView.findViewById<EditText>(R.id.editUsername)
         val passwordEdit = dialogView.findViewById<EditText>(R.id.editPassword)
         val parallelSwitch = dialogView.findViewById<MaterialSwitch>(R.id.switchParallelPlayback)
+        val offlinePathText = dialogView.findViewById<TextView>(R.id.tvOfflinePath)
+        val changeOfflinePathBtn = dialogView.findViewById<Button>(R.id.btnChangeOfflinePath)
         val storageBtn = dialogView.findViewById<Button>(R.id.btnStorageManagement)
 
         urlEdit.setText(config.url)
         usernameEdit.setText(config.username)
         passwordEdit.setText(config.password)
         parallelSwitch.isChecked = configManager.isParallelAudioPlayback()
+        offlinePathText.text = offlineManager.getOfflineLocationDisplay()
+        pendingOfflinePathText = offlinePathText
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle("设置")
@@ -1381,12 +1404,70 @@ class BrowserActivity : AppCompatActivity() {
             .setNegativeButton("取消", null)
             .create()
 
+        changeOfflinePathBtn.setOnClickListener {
+            showOfflineLocationDialog {
+                offlinePathText.text = offlineManager.getOfflineLocationDisplay()
+            }
+        }
+
         storageBtn.setOnClickListener {
             dialog.dismiss()
             showStorageDialog()
         }
 
+        dialog.setOnDismissListener {
+            pendingOfflinePathText = null
+        }
+
         dialog.show()
+    }
+
+    private fun showOfflineLocationDialog(onUpdated: () -> Unit) {
+        val defaultDir = offlineManager.getDefaultOfflineRootDir().absolutePath
+        val externalDir = offlineManager.getExternalAppOfflineDir()?.absolutePath
+        val options = buildList {
+            add("应用内部存储（默认）\n$defaultDir")
+            if (externalDir != null) {
+                add("应用外部存储（文件管理器可见）\n$externalDir")
+            }
+            add("自定义路径（通过系统文件页面选择）")
+        }.toTypedArray()
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("选择离线文件位置")
+            .setItems(options) { _, which ->
+                when {
+                    which == 0 -> migrateAndSwitchOfflineLocation(null, onUpdated)
+                    externalDir != null && which == 1 -> migrateAndSwitchOfflineLocation(externalDir, onUpdated)
+                    else -> openOfflineTree.launch(null)
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun migrateAndSwitchOfflineLocation(newLocation: String?, onUpdated: () -> Unit) {
+        val oldLocation = configManager.getOfflineDirPath()
+        Toast.makeText(this, "正在迁移离线文件...", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = offlineManager.migrateOfflineFiles(oldLocation, newLocation)
+            result.onSuccess { movedCount ->
+                configManager.setOfflineDirPath(newLocation)
+                onUpdated()
+                val msg = if (movedCount > 0) {
+                    "离线位置已更新，已迁移 $movedCount 个文件"
+                } else {
+                    "离线位置已更新"
+                }
+                Toast.makeText(this@BrowserActivity, msg, Toast.LENGTH_SHORT).show()
+            }.onFailure { e ->
+                Toast.makeText(
+                    this@BrowserActivity,
+                    "迁移失败: ${e.message ?: "无法写入目标位置"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     @Deprecated("Deprecated in API")

@@ -5,7 +5,9 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tlmc.player.data.model.ServerConfig
+import com.tlmc.player.data.model.TrackRecord
 import com.tlmc.player.data.model.WebDavFile
+import com.tlmc.player.data.model.toTrackRecords
 import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -285,17 +287,63 @@ class BrowserViewModel @Inject constructor(
 
     suspend fun collectDirectoryAudioRecords(dir: WebDavFile): List<com.tlmc.player.data.model.TrackRecord> {
         val entries = repository.listFiles(dir.path).getOrNull() ?: return emptyList()
-        return entries.filter { !it.isDirectory && it.isAudio }.map { audio ->
+        val audioFiles = entries.filter { !it.isDirectory && it.isAudio }
+        val cueFiles = entries.filter { !it.isDirectory && it.isCue }
+        val result = mutableListOf<com.tlmc.player.data.model.TrackRecord>()
+        val coveredAudioPaths = HashSet<String>()
+
+        for (cueFile in cueFiles) {
+            val cueSheet = repository.loadCueSheet(cueFile.path).getOrNull() ?: continue
+            if (cueSheet.tracks.isEmpty()) continue
+            val matchedAudio = audioFiles.firstOrNull {
+                it.name.equals(cueSheet.file, ignoreCase = true)
+            } ?: audioFiles.firstOrNull {
+                it.nameWithoutExtension.equals(cueFile.nameWithoutExtension, ignoreCase = true)
+            } ?: audioFiles.singleOrNull()
+            if (matchedAudio != null) {
+                coveredAudioPaths.add(matchedAudio.path)
+                val url = repository.getFileUrl(matchedAudio.path)
+                result.addAll(
+                    cueSheet.toTrackRecords(
+                        audioUri = url,
+                        keyPrefix = matchedAudio.path,
+                        directoryPath = dir.path,
+                        fallbackAlbumTitle = dir.name
+                    )
+                )
+            }
+        }
+
+        for (audio in audioFiles) {
+            if (audio.path in coveredAudioPaths) continue
             val url = repository.getFileUrl(audio.path)
-            com.tlmc.player.data.model.TrackRecord(
-                key = audio.path,
-                mediaId = audio.path,
-                uri = url,
-                title = audio.nameWithoutExtension.ifEmpty { audio.name },
-                albumTitle = dir.name,
-                directoryPath = dir.path
+            if (audio.extension == "flac") {
+                val embedded = repository.loadEmbeddedFlacCueSheet(audio.path).getOrNull()
+                if (embedded != null && embedded.tracks.size > 1) {
+                    result.addAll(
+                        embedded.toTrackRecords(
+                            audioUri = url,
+                            keyPrefix = audio.path,
+                            directoryPath = dir.path,
+                            fallbackAlbumTitle = dir.name
+                        )
+                    )
+                    continue
+                }
+            }
+            result.add(
+                com.tlmc.player.data.model.TrackRecord(
+                    key = audio.path,
+                    mediaId = audio.path,
+                    uri = url,
+                    title = audio.nameWithoutExtension.ifEmpty { audio.name },
+                    albumTitle = dir.name,
+                    directoryPath = dir.path
+                )
             )
         }
+
+        return result
     }
 
     fun getConfig(): ServerConfig = configManager.getConfig()

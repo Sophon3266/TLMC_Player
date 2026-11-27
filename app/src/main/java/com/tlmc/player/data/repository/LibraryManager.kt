@@ -79,6 +79,18 @@ class LibraryManager @Inject constructor(
         publishAll()
     }
 
+    fun moveFavorite(fromIndex: Int, toIndex: Int) {
+        synchronized(lock) {
+            if (fromIndex !in favoritesList.indices || toIndex !in favoritesList.indices || fromIndex == toIndex) {
+                return
+            }
+            val item = favoritesList.removeAt(fromIndex)
+            favoritesList.add(toIndex, item)
+            saveToDiskLocked()
+        }
+        publishAll()
+    }
+
     /** 批量添加到红心收藏，返回新加入的曲目数量。 */
     fun addFavorites(tracks: List<TrackRecord>): Int {
         if (tracks.isEmpty()) return 0
@@ -126,6 +138,34 @@ class LibraryManager @Inject constructor(
             if (playlistsList.removeAll { it.id == playlistId }) {
                 saveToDiskLocked()
             }
+        }
+        publishAll()
+    }
+
+    fun movePlaylist(fromIndex: Int, toIndex: Int) {
+        synchronized(lock) {
+            if (fromIndex !in playlistsList.indices || toIndex !in playlistsList.indices || fromIndex == toIndex) {
+                return
+            }
+            val item = playlistsList.removeAt(fromIndex)
+            playlistsList.add(toIndex, item)
+            saveToDiskLocked()
+        }
+        publishAll()
+    }
+
+    fun moveTrackInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        synchronized(lock) {
+            val pIdx = playlistsList.indexOfFirst { it.id == playlistId }
+            if (pIdx < 0) return
+            val tracks = playlistsList[pIdx].tracks.toMutableList()
+            if (fromIndex !in tracks.indices || toIndex !in tracks.indices || fromIndex == toIndex) {
+                return
+            }
+            val item = tracks.removeAt(fromIndex)
+            tracks.add(toIndex, item)
+            playlistsList[pIdx] = playlistsList[pIdx].copy(tracks = tracks)
+            saveToDiskLocked()
         }
         publishAll()
     }
