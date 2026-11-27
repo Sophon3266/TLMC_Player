@@ -234,22 +234,22 @@ class AudioEqualizer @Inject constructor(
     }
 }
 
-/** 预置音效曲线，按频段中心频率给出目标增益（dB）。 */
+/** 预置音效曲线，按 5 段标准中心频率（60Hz / 230Hz / 910Hz / 3.6kHz / 14kHz）给出目标增益（dB）。 */
 enum class EqualizerPreset(val label: String, private val gains: FloatArray) {
     FLAT("平坦", floatArrayOf(0f, 0f, 0f, 0f, 0f)),
-    POP("流行", floatArrayOf(2f, 1f, 2f, 2f, 1.5f)),
-    ROCK("摇滚", floatArrayOf(5f, 3f, -1f, 2f, 4f)),
-    JAZZ("爵士", floatArrayOf(3f, 1.5f, 0.5f, 2f, 3f)),
-    CLASSICAL("古典", floatArrayOf(1f, 0.5f, 0f, 1.5f, 2f)),
-    ELECTRONIC("电子", floatArrayOf(6f, 3f, 0f, 2f, 3f)),
-    DANCE("舞曲", floatArrayOf(5f, 2.5f, 0f, 2f, 4f)),
-    VOCAL("人声", floatArrayOf(-4f, 1f, 4f, 2f, -1f)),
-    BASS("低音增强", floatArrayOf(7f, 5f, 1f, -2f, -4f)),
-    TREBLE("高音增强", floatArrayOf(-3f, -2f, 0f, 3f, 5f)),
-    ACOUSTIC("原声", floatArrayOf(1f, 2f, 2f, 1.5f, 1f)),
-    HIPHOP("嘻哈", floatArrayOf(7f, 5f, 0f, 1f, -1f)),
-    METAL("金属", floatArrayOf(4f, 2f, -2f, 3f, 5f)),
-    LOUDNESS("响度", floatArrayOf(6f, 3f, -2f, 4f, 4f));
+    POP("流行", floatArrayOf(3f, 1f, 0f, 2f, 3f)),
+    ROCK("摇滚", floatArrayOf(4f, 1f, -1f, 2f, 3f)),
+    JAZZ("爵士", floatArrayOf(2f, 2f, 1f, 2f, 3f)),
+    CLASSICAL("古典", floatArrayOf(1f, 0f, 0f, 1f, 2f)),
+    ELECTRONIC("电子", floatArrayOf(5f, 3f, 0f, 2f, 4f)),
+    DANCE("舞曲", floatArrayOf(5f, 2f, -1f, 1f, 4f)),
+    VOCAL("人声", floatArrayOf(-1f, 0f, 3f, 3f, 1f)),
+    BASS("低音增强", floatArrayOf(6f, 3f, -1f, -1f, 0f)),
+    TREBLE("高音增强", floatArrayOf(-1f, -1f, 0f, 3f, 6f)),
+    ACOUSTIC("原声", floatArrayOf(2f, 1f, 2f, 1f, 3f)),
+    HIPHOP("嘻哈", floatArrayOf(6f, 3f, -2f, 1f, 3f)),
+    METAL("金属", floatArrayOf(4f, 2f, -2f, 3f, 4f)),
+    LOUDNESS("响度", floatArrayOf(5f, 2f, -1f, 2f, 4f));
 
     /** 返回指定频率的目标增益（dB），按对数频率在控制点之间线性插值。 */
     fun gainDbAt(frequencyHz: Int): Float {
@@ -271,6 +271,6 @@ enum class EqualizerPreset(val label: String, private val gains: FloatArray) {
     }
 
     companion object {
-        private val CONTROL_FREQUENCIES = floatArrayOf(60f, 250f, 1000f, 4000f, 12000f)
+        private val CONTROL_FREQUENCIES = floatArrayOf(60f, 230f, 910f, 3600f, 14000f)
     }
 }
