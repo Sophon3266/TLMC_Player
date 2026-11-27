@@ -9,6 +9,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -18,9 +19,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -33,6 +37,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
 import com.tlmc.player.data.model.PlayMode
+import com.tlmc.player.data.model.TrackRecord
+import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.databinding.ActivityPlayerBinding
 import com.tlmc.player.ui.browser.BrowserActivity
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
@@ -59,6 +65,9 @@ class PlayerActivity : AppCompatActivity() {
 
     @Inject
     lateinit var audioEqualizer: AudioEqualizer
+
+    @Inject
+    lateinit var libraryManager: LibraryManager
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -105,6 +114,7 @@ class PlayerActivity : AppCompatActivity() {
 
         setupTrackList()
         setupControls()
+        setupFavoriteButton()
         observeViewModel()
     }
 
@@ -115,6 +125,10 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_add_to_playlist -> {
+                showAddToPlaylistDialog()
+                true
+            }
             R.id.action_pick_lyrics -> {
                 showPickLyricsDialog()
                 true
@@ -182,6 +196,10 @@ class PlayerActivity : AppCompatActivity() {
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 runOnUiThread { syncPlayModeFromController() }
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                runOnUiThread { updateAudioFormatInfo(tracks) }
             }
         })
 
@@ -400,7 +418,149 @@ class PlayerActivity : AppCompatActivity() {
 
             // Load lyrics for current track
             viewModel.loadLyricsFromMediaItem(mediaItem)
+
+            updateFavoriteButton(mediaItem)
+            updateAudioFormatInfo(controller.currentTracks)
         }
+    }
+
+    private fun setupFavoriteButton() {
+        binding.btnFavorite.setOnClickListener { toggleCurrentFavorite() }
+    }
+
+    private fun toggleCurrentFavorite() {
+        val mediaItem = mediaController?.currentMediaItem ?: return
+        val record = TrackRecord.fromMediaItem(mediaItem) ?: return
+        val isFav = libraryManager.toggleFavorite(record)
+        updateFavoriteButton(mediaItem)
+        Toast.makeText(
+            this,
+            if (isFav) "已添加到红心收藏" else "已取消红心收藏",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun updateFavoriteButton(mediaItem: MediaItem?) {
+        val key = mediaItem?.let { TrackRecord.buildKey(it) }.orEmpty()
+        val isFav = key.isNotEmpty() && libraryManager.isFavorite(key)
+        binding.btnFavorite.setImageResource(
+            if (isFav) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+        )
+        if (isFav) {
+            binding.btnFavorite.imageTintList = null
+        } else {
+            val typedValue = android.util.TypedValue()
+            theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, typedValue, true)
+            binding.btnFavorite.imageTintList = android.content.res.ColorStateList.valueOf(typedValue.data)
+        }
+    }
+
+    private fun updateAudioFormatInfo(tracks: Tracks?) {
+        val audioFormat = tracks?.groups
+            ?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+            ?.let { group ->
+                (0 until group.length)
+                    .firstOrNull { group.isTrackSelected(it) }
+                    ?.let { group.getTrackFormat(it) }
+            }
+
+        if (audioFormat == null) {
+            binding.audioFormatInfo.visibility = View.GONE
+            return
+        }
+
+        val parts = mutableListOf<String>()
+        formatAudioCodecName(audioFormat.sampleMimeType)?.let { parts.add(it) }
+        if (audioFormat.sampleRate != Format.NO_VALUE && audioFormat.sampleRate > 0) {
+            val khz = audioFormat.sampleRate / 1000.0
+            val formattedKhz = if (khz % 1.0 == 0.0) {
+                "${khz.toInt()} kHz"
+            } else {
+                String.format(java.util.Locale.US, "%.1f kHz", khz)
+            }
+            parts.add(formattedKhz)
+        }
+        formatBitDepth(audioFormat.pcmEncoding)?.let { parts.add(it) }
+        if (audioFormat.bitrate != Format.NO_VALUE && audioFormat.bitrate > 0) {
+            parts.add("${audioFormat.bitrate / 1000} kbps")
+        }
+
+        if (parts.isEmpty()) {
+            binding.audioFormatInfo.visibility = View.GONE
+        } else {
+            binding.audioFormatInfo.text = parts.joinToString(" · ")
+            binding.audioFormatInfo.visibility = View.VISIBLE
+        }
+    }
+
+    private fun formatAudioCodecName(mimeType: String?): String? {
+        return when (mimeType?.lowercase()) {
+            "audio/flac" -> "FLAC"
+            "audio/mpeg" -> "MP3"
+            "audio/mp4a-latm", "audio/aac" -> "AAC"
+            "audio/vorbis", "audio/ogg" -> "OGG"
+            "audio/opus" -> "OPUS"
+            "audio/raw", "audio/wav" -> "PCM/WAV"
+            "audio/alac" -> "ALAC"
+            null -> null
+            else -> mimeType.substringAfter('/').uppercase()
+        }
+    }
+
+    private fun formatBitDepth(pcmEncoding: Int): String? {
+        return when (pcmEncoding) {
+            C.ENCODING_PCM_8BIT -> "8 bit"
+            C.ENCODING_PCM_16BIT -> "16 bit"
+            C.ENCODING_PCM_24BIT, C.ENCODING_PCM_24BIT_BIG_ENDIAN -> "24 bit"
+            C.ENCODING_PCM_32BIT, C.ENCODING_PCM_32BIT_BIG_ENDIAN -> "32 bit"
+            C.ENCODING_PCM_FLOAT -> "32-bit float"
+            else -> null
+        }
+    }
+
+    private fun showAddToPlaylistDialog() {
+        val mediaItem = mediaController?.currentMediaItem
+        val record = mediaItem?.let { TrackRecord.fromMediaItem(it) }
+        if (record == null) {
+            Toast.makeText(this, "当前没有可添加的曲目", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val playlists = libraryManager.getPlaylists()
+        val names = playlists.map { "${it.name} (${it.tracks.size})" } + listOf("+ 新建歌单")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("添加到歌单")
+            .setItems(names.toTypedArray()) { _, which ->
+                if (which == playlists.size) {
+                    val input = EditText(this).apply {
+                        hint = "输入歌单名称"
+                        setPadding(48, 24, 48, 24)
+                    }
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("新建歌单")
+                        .setView(input)
+                        .setPositiveButton("创建") { _, _ ->
+                            val name = input.text.toString().trim()
+                            if (name.isNotEmpty()) {
+                                val created = libraryManager.createPlaylist(name)
+                                libraryManager.addTrackToPlaylist(created.id, record)
+                                Toast.makeText(this, "已添加到「${created.name}」", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                } else {
+                    val target = playlists[which]
+                    val added = libraryManager.addTrackToPlaylist(target.id, record)
+                    Toast.makeText(
+                        this,
+                        if (added) "已添加到「${target.name}」" else "该曲目已在「${target.name}」中",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun updatePlaybackState(state: Int) {

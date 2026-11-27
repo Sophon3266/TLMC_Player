@@ -25,21 +25,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.tlmc.player.R
 import com.tlmc.player.data.model.PlayMode
 import com.tlmc.player.data.model.ServerConfig
+import com.tlmc.player.data.model.TrackRecord
 import com.tlmc.player.data.model.WebDavFile
+import com.tlmc.player.data.repository.ConfigManager
+import com.tlmc.player.data.repository.LibraryManager
+import com.tlmc.player.data.repository.OfflineManager
 import com.tlmc.player.databinding.ActivityBrowserBinding
 import com.tlmc.player.ui.gallery.GalleryActivity
 import com.tlmc.player.ui.player.PlayerActivity
@@ -48,6 +55,7 @@ import com.tlmc.player.ui.text.TextActivity
 import com.tlmc.player.util.ArtworkUtils
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class BrowserActivity : AppCompatActivity() {
@@ -55,6 +63,20 @@ class BrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityBrowserBinding
     private val viewModel: BrowserViewModel by viewModels()
     private lateinit var fileAdapter: FileAdapter
+
+    @Inject
+    lateinit var configManager: ConfigManager
+
+    @Inject
+    lateinit var libraryManager: LibraryManager
+
+    @Inject
+    lateinit var offlineManager: OfflineManager
+
+    @Inject
+    lateinit var folderCoverLoader: FolderCoverLoader
+
+    private var lastDownloadActive = false
 
     // Mini Player
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -158,12 +180,22 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         fileAdapter = FileAdapter(
+            folderCoverLoader = folderCoverLoader,
+            coroutineScope = lifecycleScope,
             onFileClick = { file -> onFileClicked(file) },
             onFileLongClick = { file -> onFileLongClicked(file) }
         )
-        binding.recyclerView.apply {
-            layoutManager = LinearLayoutManager(this@BrowserActivity)
-            adapter = fileAdapter
+        applyViewMode(configManager.isGridView())
+        binding.recyclerView.adapter = fileAdapter
+    }
+
+    private fun applyViewMode(isGrid: Boolean) {
+        fileAdapter.isGridMode = isGrid
+        binding.recyclerView.layoutManager = if (isGrid) {
+            val spanCount = if (resources.configuration.screenWidthDp >= 600) 3 else 2
+            GridLayoutManager(this@BrowserActivity, spanCount)
+        } else {
+            LinearLayoutManager(this@BrowserActivity)
         }
     }
 
@@ -295,6 +327,21 @@ class BrowserActivity : AppCompatActivity() {
                 }
                 viewModel.clearDownloadResult()
             }
+        }
+
+        offlineManager.downloadProgress.observe(this) { progress ->
+            if (lastDownloadActive && !progress.active) {
+                if (progress.error != null) {
+                    Toast.makeText(this, "离线下载失败: ${progress.error}", Toast.LENGTH_LONG).show()
+                } else if (progress.total > 0) {
+                    Toast.makeText(
+                        this,
+                        "「${progress.albumName}」离线下载完成 (${progress.completed}/${progress.total})",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            lastDownloadActive = progress.active
         }
 
         // Search observers (always active, update dialog views if showing)
@@ -481,7 +528,19 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun onFileLongClicked(file: WebDavFile): Boolean {
         if (file.isDirectory) {
-            showFileInfo(file)
+            val options = arrayOf("文件夹信息", "批量离线下载")
+            MaterialAlertDialogBuilder(this)
+                .setTitle(file.name)
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> showFileInfo(file)
+                        1 -> {
+                            Toast.makeText(this, "开始离线下载「${file.name}」...", Toast.LENGTH_SHORT).show()
+                            offlineManager.downloadDirectory(file)
+                        }
+                    }
+                }
+                .show()
         } else if (file.isAudio || file.isCue) {
             val options = arrayOf("文件信息", "添加到播放列表", "立即播放", "下载到本地")
             MaterialAlertDialogBuilder(this)
@@ -875,6 +934,28 @@ class BrowserActivity : AppCompatActivity() {
         Toast.makeText(this, "已添加 ${items.size} 个本地音频", Toast.LENGTH_SHORT).show()
     }
 
+    internal fun playTrackRecords(records: List<TrackRecord>, startIndex: Int = 0) {
+        if (records.isEmpty()) return
+        playMediaItemsDirectly(records.map { it.toMediaItem() }, startIndex)
+    }
+
+    internal fun playMediaItemsDirectly(items: List<MediaItem>, startIndex: Int = 0) {
+        if (items.isEmpty()) return
+        val safeIndex = startIndex.coerceIn(0, items.lastIndex)
+        val controller = mediaController
+        if (controller == null) {
+            pendingLocalMediaItems = items
+            connectToPlayerService()
+            Toast.makeText(this, "正在连接播放器...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        controller.setMediaItems(items, safeIndex, 0L)
+        controller.prepare()
+        controller.play()
+        updateMiniPlayerVisibility()
+        updateMiniPlayerInfo()
+    }
+
     private fun showPlaylistDialog() {
         val controller = mediaController ?: return
 
@@ -1113,6 +1194,9 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_browser, menu)
+        menu.findItem(R.id.action_view_mode)?.setIcon(
+            if (configManager.isGridView()) R.drawable.ic_view_list else R.drawable.ic_view_grid
+        )
         return true
     }
 
@@ -1120,6 +1204,21 @@ class BrowserActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_search -> {
                 showSearchDialog()
+                true
+            }
+            R.id.action_view_mode -> {
+                val nextGrid = !configManager.isGridView()
+                configManager.setGridView(nextGrid)
+                applyViewMode(nextGrid)
+                invalidateOptionsMenu()
+                true
+            }
+            R.id.action_library -> {
+                showLibraryDialog()
+                true
+            }
+            R.id.action_offline_library -> {
+                showOfflineLibraryDialog()
                 true
             }
             R.id.action_open_local -> {
@@ -1141,13 +1240,16 @@ class BrowserActivity : AppCompatActivity() {
         val urlEdit = dialogView.findViewById<EditText>(R.id.editUrl)
         val usernameEdit = dialogView.findViewById<EditText>(R.id.editUsername)
         val passwordEdit = dialogView.findViewById<EditText>(R.id.editPassword)
+        val parallelSwitch = dialogView.findViewById<MaterialSwitch>(R.id.switchParallelPlayback)
+        val storageBtn = dialogView.findViewById<Button>(R.id.btnStorageManagement)
 
         urlEdit.setText(config.url)
         usernameEdit.setText(config.username)
         passwordEdit.setText(config.password)
+        parallelSwitch.isChecked = configManager.isParallelAudioPlayback()
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle("服务器设置")
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("设置")
             .setView(dialogView)
             .setPositiveButton("保存") { _, _ ->
                 val newConfig = ServerConfig(
@@ -1155,11 +1257,30 @@ class BrowserActivity : AppCompatActivity() {
                     username = usernameEdit.text.toString().trim(),
                     password = passwordEdit.text.toString().trim()
                 )
+                val serverChanged = newConfig != config
                 viewModel.saveConfig(newConfig)
-                viewModel.loadDirectory("/")
+
+                val parallelEnabled = parallelSwitch.isChecked
+                configManager.setParallelAudioPlayback(parallelEnabled)
+                startService(
+                    Intent(this, PlayerService::class.java).apply {
+                        action = PlayerService.ACTION_UPDATE_AUDIO_FOCUS
+                    }
+                )
+
+                if (serverChanged) {
+                    viewModel.loadDirectory("/")
+                }
             }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+
+        storageBtn.setOnClickListener {
+            dialog.dismiss()
+            showStorageDialog()
+        }
+
+        dialog.show()
     }
 
     @Deprecated("Deprecated in API")

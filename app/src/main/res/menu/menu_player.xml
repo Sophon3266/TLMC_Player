@@ -3,6 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_add_to_playlist"
+        android:title="添加到歌单"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_pick_lyrics"
         android:title="选择歌词"
         app:showAsAction="never" />

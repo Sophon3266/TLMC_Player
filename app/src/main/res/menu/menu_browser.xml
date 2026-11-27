@@ -9,6 +9,22 @@
         app:showAsAction="ifRoom" />
 
     <item
+        android:id="@+id/action_view_mode"
+        android:icon="@drawable/ic_view_grid"
+        android:title="切换视图"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_library"
+        android:title="音乐库（收藏/歌单/历史）"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_offline_library"
+        android:title="离线曲库"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_open_local"
         android:title="本地音频"
         app:showAsAction="never" />

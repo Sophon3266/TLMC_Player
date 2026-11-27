@@ -1,40 +1,50 @@
 # TLMC Player
 
-一个用于浏览和播放 WebDAV 服务器媒体文件的 Android 应用，支持音频、图片和文本内容。
+一个用于浏览和播放 WebDAV 服务器媒体文件的 Android 应用，支持无损/常见音频、CUE 分轨、歌词同步、图片库及多编码文本查看。
 
 ## 功能特性
 
-- **文件浏览**: 连接 WebDAV 服务器，浏览目录结构
-- **本地音频**: 通过系统文件选择器播放本地音频，可多选并加入播放列表
-- **文件搜索**: 从当前目录递归搜索，最多返回 200 条结果
-- **音频播放**: 支持播放列表、后台播放和通知栏控制，重开应用自动恢复上次播放列表，并记忆音频上次播放进度
-- **均衡器**: 支持开关、频段增益调节与常见音乐风格预设（流行、摇滚、爵士、古典、电子、人声等），配置自动保存
-- **播放容错**: 播放出错或缓冲超时自动重试恢复；CUE 切轨共享磁盘缓存，减少重复下载
-- **通知与锁屏**: 媒体通知展示曲目/专辑信息、封面与进度条，支持播放顺序切换，锁屏可见
-- **音频封面**: 本地音频读取内嵌封面，WebDAV 音频使用同目录 cover/folder 图片，显示在通知、迷你播放器和播放页
-- **音频并行播放策略**: 其他应用开始播放音频时，本应用不会自动停止当前音频播放
-- **CUE 分轨播放**: 自动检测同名 CUE 文件，按曲目分割播放
-- **歌词支持**: 支持 LRC 歌词解析与同步高亮
-- **图片查看**: 支持缩放和平移
-- **图片库浏览**: 支持图片浏览，循环滑动切换
-- **文本查看**: 支持多种编码 (UTF-8、GBK、Shift-JIS 等)
+### 文件浏览与管理
+- **WebDAV 目录浏览**：连接 WebDAV 服务器，支持面包屑路径导航、下拉刷新、快速滚动条及中文拼音排序
+- **专辑目录封面缩略图**：异步加载并缓存目录下 `cover` / `folder` 等图片作为文件夹封面缩略图，支持**列表视图 / 网格视图**一键切换
+- **递归并发搜索**：从当前目录并发递归搜索文件与目录，最多返回 200 条结果，支持随时取消
+- **单文件下载与批量离线**：支持长按单文件下载到系统下载目录，以及长按目录**批量离线下载**整张专辑到本地，并提供**离线曲库**视图管理与播放
+- **本地音频**：通过系统文件选择器多选本地音频并加入播放列表
+
+### 音频播放与音效
+- **后台播放与队列恢复**：基于 Media3 ExoPlayer + `MediaSessionService`，支持播放列表管理（上移/下移排序、移除、定位到所在文件夹）、重开应用自动恢复队列与断点续播
+- **红心收藏、自定义歌单与播放历史**：支持播放页红心收藏单曲、创建与管理跨目录自定义歌单，以及自动记录最近播放历史
+- **CUE 分轨播放**：自动检测同名 CUE 文件或直接打开 `.cue`，按曲目精准分轨播放，共享 512MB 磁盘缓存减少重复下载
+- **音频格式详情**：播放页实时展示当前音频格式、采样率、位深与码率信息
+- **播放策略开关**：支持在设置中切换“并行播放（不抢占音频焦点）”或“标准焦点模式（其他应用出声时自动暂停）”
+- **均衡器**：绑定系统音频均衡器，支持开关、各频段增益调节及 14 种常见音乐风格预设（按标准 5 段频率曲线映射），配置自动保存
+- **播放容错**：播放出错自动延迟重试，缓冲超时自动重建媒体源恢复
+- **通知与锁屏控制**：媒体通知展示曲目/专辑、封面与进度条，支持播放顺序切换（顺序、列表循环、单曲循环、随机），锁屏可见
+- **音频封面**：本地音频读取内嵌封面，WebDAV 音频自动匹配同目录封面图片，展示在播放页、迷你播放器与通知栏
+- **LRC 歌词同步**：自动匹配同目录 `.lrc` 文件并支持手动指定歌词，支持多编码解析与滚动高亮
+
+### 存储与缓存管理
+- **存储管理界面**：实时查看媒体播放缓存（上限 512MB）、封面与缩略图缓存及离线曲库占用，支持一键清理媒体缓存与封面缓存
+
+### 图片与文本查看
+- **图片查看与画廊**：支持双指缩放与平移，支持同目录图片循环滑动浏览，内置 TIFF 解码器
+- **文本查看**：自动识别 UTF-8、GBK、Shift-JIS 等多种文本编码
 
 ## 格式支持
 
-- **音频**: flac, mp3, wav, ogg, m4a, aac
-- **图片**: png, jpg, jpeg, tif, tiff, bmp, webp
-- **文本**: txt, log, md, nfo, ini, cfg, lrc
-- **CUE**: cue
+- **音频**：`flac`, `mp3`, `wav`, `ogg`, `m4a`, `aac`
+- **图片**：`png`, `jpg`, `jpeg`, `tif`, `tiff`, `bmp`, `webp`
+- **文本**：`txt`, `log`, `md`, `nfo`, `ini`, `cfg`, `lrc`
+- **分轨**：`cue`
 
 ## 使用说明
 
-- 点击目录: 进入下一层目录
-- 点击音频文件: 可选择单曲播放或整目录加入播放列表
-- 工具栏菜单「本地音频」: 通过系统文件选择器播放本地音频
-- 播放列表: 使用每项的上移/下移按钮调整顺序
-- 点击 CUE 文件: 进入音频播放器并按曲目播放
-- 点击图片文件: 进入图片查看器
-- 点击文本文件: 进入文本查看器
+- **浏览与切换视图**：点击目录进入下一层；点击右上角视图按钮在列表与网格模式间切换
+- **播放音频**：点击音频文件可选择单曲播放或整目录加入播放列表；点击 `.cue` 文件直接按分轨播放
+- **离线下载**：长按目录选择「批量离线下载」将专辑保存至本地，在菜单「离线曲库」中查看与播放
+- **音乐库管理**：在播放页点击红心收藏或通过菜单「添加到歌单」归类曲目，在浏览页菜单「音乐库」查看收藏、歌单与播放历史
+- **本地音频**：通过菜单「本地音频」打开系统文件选择器导入播放
+- **设置与缓存**：在菜单「设置」中配置 WebDAV 服务器、切换并行播放策略或进入「存储与缓存管理」清理缓存
 
 ## 构建说明
 
@@ -42,56 +52,45 @@
 
 - Android Studio Hedgehog (2023.1.1) 或更高版本
 - JDK 17
-- Android SDK 34
-- Gradle 8.5
+- Android SDK 34（`minSdk 26` / `targetSdk 34`）
+- Gradle 8.14.5
 
 ### 构建步骤
 
 1. 克隆项目
-2. 使用 Android Studio 打开项目
-3. 等待 Gradle 同步完成（IDE 会自动生成 `.gradle/`、`.idea/`、`local.properties`）
-4. 点击 Run 或使用 `./gradlew assembleDebug`
-
-> **注意**: 项目不包含构建产物（`.gradle/`、`app/build/`、`.idea/`、`local.properties`），首次打开项目需等待 Gradle 同步自动生成这些文件。
+2. 使用 Android Studio 打开项目并等待 Gradle 同步完成
+3. 点击 Run 或在命令行执行 `./gradlew assembleDebug`（Windows 下为 `.\gradlew.bat assembleDebug`）
 
 ## 项目结构
 
 ```text
 TLMC_Player/
-├── .git/                     # 版本控制
-├── .gitignore                # 排除规则
-├── app/                      # Android 应用模块
-│   ├── build.gradle.kts      # 模块配置和依赖
-│   ├── proguard-rules.pro    # ProGuard 规则
+├── app/
+│   ├── build.gradle.kts
+│   ├── proguard-rules.pro
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── java/com/tlmc/player/
-│       └── res/
-├── gradle/                   # Gradle Wrapper
-├── build.gradle.kts          # 根项目配置
-├── settings.gradle.kts       # 模块设置
-├── gradle.properties         # 全局配置
-├── gradlew / gradlew.bat     # Gradle Wrapper 脚本
+│       │   ├── TLMCApplication.kt        # Application 类（Hilt 入口）
+│       │   ├── di/                       # 依赖注入模块（AppModule、NetworkModule）
+│       │   ├── data/
+│       │   │   ├── model/                # 数据模型（WebDavFile、ServerConfig、CueSheet、PlayMode、TrackRecord 等）
+│       │   │   ├── repository/           # 数据仓库（ConfigManager、WebDavRepository、LibraryManager、OfflineManager）
+│       │   │   └── webdav/               # WebDAV 客户端（OkHttp + PROPFIND）
+│       │   ├── ui/
+│       │   │   ├── browser/              # 文件浏览器、网格/列表适配器、封面加载器与音乐库/离线/缓存弹窗
+│       │   │   ├── player/               # 音频播放器、均衡器、后台 MediaSessionService 与通知提供者
+│       │   │   ├── image/                # 单图查看器
+│       │   │   ├── gallery/              # 图片画廊浏览器
+│       │   │   └── text/                 # 多编码文本查看器
+│       │   └── util/                     # 工具类（CUE/LRC 解析、编码检测、TIFF 解码、封面与排序工具）
+│       └── res/                          # 布局、菜单、图标与主题资源
+├── gradle/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradle.properties
+├── gradlew / gradlew.bat
 └── README.md
-```
-
-### 代码结构
-
-```text
-app/src/main/java/com/tlmc/player/
-├── TLMCApplication.kt        # Application 类（Hilt 入口）
-├── di/                       # 依赖注入模块
-├── data/
-│   ├── model/                # 数据模型
-│   ├── repository/           # 数据仓库（ConfigManager、WebDavRepository）
-│   └── webdav/               # WebDAV 客户端
-├── ui/
-│   ├── browser/              # 文件浏览器（启动页）
-│   ├── player/               # 音频播放器 + 后台服务
-│   ├── image/                # 图片查看器
-│   ├── gallery/              # 图片库浏览
-│   └── text/                 # 文本查看器
-└── util/                     # 工具类（解析器、编码检测、TIFF 解码）
 ```
 
 ## 许可证

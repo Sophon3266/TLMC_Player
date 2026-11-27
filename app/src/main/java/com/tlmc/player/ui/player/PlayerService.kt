@@ -23,7 +23,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.tlmc.player.data.model.TrackRecord
 import com.tlmc.player.data.repository.ConfigManager
+import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.util.FileUtils
 import com.tlmc.player.ui.browser.BrowserActivity
@@ -58,6 +60,11 @@ class PlayerService : MediaSessionService() {
 
     @Inject
     lateinit var repository: WebDavRepository
+
+    @Inject
+    lateinit var libraryManager: LibraryManager
+
+    private var lastRecordedHistoryKey: String? = null
 
     private var mediaSession: MediaSession? = null
     private lateinit var notificationProvider: PlayerMediaNotificationProvider
@@ -120,9 +127,11 @@ class PlayerService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        val handleAudioFocus = !configManager.isParallelAudioPlayback()
+
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttributes, false)
+            .setAudioAttributes(audioAttributes, handleAudioFocus)
             .setHandleAudioBecomingNoisy(true)
             // 后台播放（息屏/切换应用）时保持 CPU 与网络唤醒
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -218,6 +227,14 @@ class PlayerService : MediaSessionService() {
                 if (isPlaying) {
                     audioEqualizer.attach(player.audioSessionId)
                     resetPlaybackRecovery()
+                    player.currentMediaItem?.let { item ->
+                        TrackRecord.fromMediaItem(item)?.let { record ->
+                            if (record.key != lastRecordedHistoryKey) {
+                                lastRecordedHistoryKey = record.key
+                                libraryManager.recordHistory(record)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -256,8 +273,20 @@ class PlayerService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == PlayerMediaNotificationProvider.ACTION_CYCLE_PLAY_ORDER) {
-            mediaSession?.player?.let { cyclePlayOrder(it) }
+        when (intent?.action) {
+            PlayerMediaNotificationProvider.ACTION_CYCLE_PLAY_ORDER -> {
+                mediaSession?.player?.let { cyclePlayOrder(it) }
+            }
+            ACTION_UPDATE_AUDIO_FOCUS -> {
+                val player = mediaSession?.player as? ExoPlayer
+                if (player != null) {
+                    val audioAttributes = AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build()
+                    player.setAudioAttributes(audioAttributes, !configManager.isParallelAudioPlayback())
+                }
+            }
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -629,6 +658,7 @@ class PlayerService : MediaSessionService() {
     }
 
     companion object {
+        const val ACTION_UPDATE_AUDIO_FOCUS = "com.tlmc.player.ACTION_UPDATE_AUDIO_FOCUS"
         private const val SAVE_PROGRESS_INTERVAL_MS = 5_000L
         private const val POSITION_RESTORE_MAX_CURRENT_MS = 1_000L
         private const val POSITION_RESTORE_END_MARGIN_MS = 5_000L

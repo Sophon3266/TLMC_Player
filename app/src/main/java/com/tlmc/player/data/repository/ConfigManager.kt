@@ -20,6 +20,8 @@ class ConfigManager @Inject constructor(
         private const val KEY_AUDIO_QUEUE_STATE = "audio_queue_state"
         private const val KEY_AUDIO_POSITION_PREFIX = "audio_pos_"
         private const val KEY_EQUALIZER_STATE = "equalizer_state"
+        private const val KEY_PARALLEL_AUDIO_PLAYBACK = "parallel_audio_playback"
+        private const val KEY_GRID_VIEW = "browser_grid_view"
     }
 
     data class SavedAudioItem(
@@ -201,6 +203,22 @@ class ConfigManager @Inject constructor(
         } catch (_: Exception) {
             null
         }
+    }
+
+    fun isParallelAudioPlayback(): Boolean {
+        return prefs.getBoolean(KEY_PARALLEL_AUDIO_PLAYBACK, true)
+    }
+
+    fun setParallelAudioPlayback(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PARALLEL_AUDIO_PLAYBACK, enabled).apply()
+    }
+
+    fun isGridView(): Boolean {
+        return prefs.getBoolean(KEY_GRID_VIEW, false)
+    }
+
+    fun setGridView(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_GRID_VIEW, enabled).apply()
     }
 
     private fun audioPositionKey(playbackKey: String): String {
