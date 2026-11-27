@@ -2,6 +2,7 @@ package com.tlmc.player.ui.browser
 
 import android.graphics.Typeface
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -36,6 +37,7 @@ class BrowserPlaylistAdapter(
         fun bind(item: PlaylistItem) {
             binding.playlistTitle.text = item.title
             binding.playlistArtist.text = item.artist
+            binding.playlistArtist.visibility = if (item.artist.isNotEmpty()) View.VISIBLE else View.GONE
             binding.playlistIndex.text = "%02d".format(item.index + 1)
 
             val titleColor = if (item.isCurrent) {

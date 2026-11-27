@@ -3,14 +3,95 @@ package com.tlmc.player.util
 import com.tlmc.player.data.model.CueSheet
 import com.tlmc.player.data.model.CueTrack
 
+data class FlacMetadata(
+    val title: String = "",
+    val artist: String = "",
+    val album: String = ""
+)
+
+data class FlacMetadataParseResult(
+    val metadata: FlacMetadata,
+    val reachedVorbisOrEnd: Boolean
+)
+
 /**
- * 从 FLAC 文件头元数据块中提取内嵌 CUESHEET（支持 VORBIS_COMMENT 的 CUESHEET 标签与二进制 CUESHEET 块）。
+ * 从 FLAC 文件头元数据块中提取内嵌 CUESHEET（支持 VORBIS_COMMENT 的 CUESHEET 标签与二进制 CUESHEET 块）
+ * 以及 VORBIS_COMMENT 中的曲目元数据（TITLE、ARTIST、ALBUM）。
  */
 object FlacCueExtractor {
 
     private const val BLOCK_STREAMINFO = 0
     private const val BLOCK_VORBIS_COMMENT = 4
     private const val BLOCK_CUESHEET = 5
+
+    fun extractMetadata(bytes: ByteArray): FlacMetadata? {
+        return extractMetadataResult(bytes)?.metadata
+    }
+
+    fun extractMetadataResult(bytes: ByteArray): FlacMetadataParseResult? {
+        if (bytes.size < 42) return null
+        if (bytes[0] != 0x66.toByte() ||
+            bytes[1] != 0x4C.toByte() ||
+            bytes[2] != 0x61.toByte() ||
+            bytes[3] != 0x43.toByte()
+        ) {
+            return null
+        }
+
+        var pos = 4
+        var titleTag = ""
+        var artistTag = ""
+        var albumArtistTag = ""
+        var albumTag = ""
+        var sawVorbisComment = false
+        var truncated = false
+
+        while (pos + 4 <= bytes.size) {
+            val header = bytes[pos].toInt() and 0xFF
+            val isLast = (header and 0x80) != 0
+            val blockType = header and 0x7F
+            val blockLength = ((bytes[pos + 1].toInt() and 0xFF) shl 16) or
+                ((bytes[pos + 2].toInt() and 0xFF) shl 8) or
+                (bytes[pos + 3].toInt() and 0xFF)
+            pos += 4
+
+            if (blockLength < 0 || pos + blockLength > bytes.size) {
+                truncated = true
+                break
+            }
+
+            if (blockType == BLOCK_VORBIS_COMMENT) {
+                sawVorbisComment = true
+                val comments = parseVorbisComments(bytes, pos, blockLength)
+                for ((key, value) in comments) {
+                    val trimmed = value.trim()
+                    if (trimmed.isEmpty()) continue
+                    when {
+                        key.equals("TITLE", ignoreCase = true) && titleTag.isEmpty() -> titleTag = trimmed
+                        key.equals("ARTIST", ignoreCase = true) && artistTag.isEmpty() -> artistTag = trimmed
+                        (key.equals("ALBUMARTIST", ignoreCase = true) ||
+                            key.equals("PERFORMER", ignoreCase = true)) && albumArtistTag.isEmpty() -> {
+                            albumArtistTag = trimmed
+                        }
+                        key.equals("ALBUM", ignoreCase = true) && albumTag.isEmpty() -> albumTag = trimmed
+                    }
+                }
+                break
+            }
+
+            pos += blockLength
+            if (isLast) break
+        }
+
+        return FlacMetadataParseResult(
+            metadata = FlacMetadata(
+                title = titleTag,
+                artist = artistTag.ifEmpty { albumArtistTag },
+                album = albumTag
+            ),
+            reachedVorbisOrEnd = sawVorbisComment || !truncated
+        )
+    }
 
     fun extract(bytes: ByteArray, fallbackTitle: String = ""): CueSheet? {
         if (bytes.size < 42) return null

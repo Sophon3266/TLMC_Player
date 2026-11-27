@@ -93,6 +93,7 @@ class LibraryActivity : AppCompatActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var pendingMediaItems: Pair<List<MediaItem>, Int>? = null
+    private var activePlaylistDialogRefresh: (() -> Unit)? = null
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
     private var isMiniPlayerSeeking = false
     private val handler = Handler(Looper.getMainLooper())
@@ -893,12 +894,22 @@ class LibraryActivity : AppCompatActivity() {
                 runOnUiThread { updateMiniPlayerControls() }
             }
 
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                runOnUiThread { activePlaylistDialogRefresh?.invoke() }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                runOnUiThread { updateMiniPlayerInfo() }
+                runOnUiThread {
+                    updateMiniPlayerInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-                runOnUiThread { updateMiniPlayerInfo() }
+                runOnUiThread {
+                    updateMiniPlayerInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -987,7 +998,10 @@ class LibraryActivity : AppCompatActivity() {
                 ?: "Unknown"
             val artist = metadata.artist?.toString().orEmpty()
             binding.miniPlayerTitle.text = title
+            binding.miniPlayerTitle.isSelected = true
             binding.miniPlayerArtist.text = artist
+            binding.miniPlayerArtist.visibility = if (artist.isNotEmpty()) View.VISIBLE else View.GONE
+            binding.miniPlayerArtist.isSelected = true
 
             val artwork = ArtworkUtils.decodeArtwork(
                 metadata.artworkData ?: controller.currentMediaItem?.mediaMetadata?.artworkData
@@ -1143,6 +1157,14 @@ class LibraryActivity : AppCompatActivity() {
                 tracks,
                 "将当前播放列表添加到歌单"
             )
+        }
+
+        activePlaylistDialogRefresh = {
+            refreshPlaylistDialog(controller, recyclerView, emptyView)
+            dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+        }
+        dialog.setOnDismissListener {
+            activePlaylistDialogRefresh = null
         }
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)

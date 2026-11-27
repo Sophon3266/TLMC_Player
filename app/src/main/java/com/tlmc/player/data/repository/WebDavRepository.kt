@@ -7,6 +7,8 @@ import com.tlmc.player.data.webdav.WebDavClient
 import java.io.OutputStream
 import com.tlmc.player.util.CueParser
 import com.tlmc.player.util.EncodingDetector
+import com.tlmc.player.util.FlacCueExtractor
+import com.tlmc.player.util.FlacMetadata
 import com.tlmc.player.util.LrcParser
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,6 +74,34 @@ class WebDavRepository @Inject constructor(
             }
             val fileName = flacPath.substringAfterLast('/')
             com.tlmc.player.util.FlacCueExtractor.extract(headerBytes, fileName.substringBeforeLast('.'))
+        }
+    }
+
+    suspend fun loadFlacMetadata(flacPath: String): Result<FlacMetadata?> {
+        return runCatching {
+            if (flacPath.startsWith("file://") || java.io.File(flacPath).exists()) {
+                val localFile = if (flacPath.startsWith("file://")) {
+                    java.io.File(android.net.Uri.parse(flacPath).path ?: flacPath)
+                } else {
+                    java.io.File(flacPath)
+                }
+                val headerBytes = localFile.inputStream().use { input ->
+                    val buf = ByteArray(2_097_152)
+                    val read = input.read(buf)
+                    if (read > 0) buf.copyOf(read) else ByteArray(0)
+                }
+                return@runCatching FlacCueExtractor.extractMetadata(headerBytes)
+            }
+
+            // 先拉取前 64KB；若 VORBIS_COMMENT 被前面的大封面块推后，再扩展到 2MB
+            val firstChunk = webDavClient.downloadFileRange(flacPath, 0L, 65_535L).getOrThrow()
+            val firstResult = FlacCueExtractor.extractMetadataResult(firstChunk)
+            if (firstResult != null && firstResult.reachedVorbisOrEnd) {
+                return@runCatching firstResult.metadata
+            }
+
+            val fullHeader = webDavClient.downloadFileRange(flacPath, 0L, 2_097_151L).getOrThrow()
+            FlacCueExtractor.extractMetadata(fullHeader)
         }
     }
 

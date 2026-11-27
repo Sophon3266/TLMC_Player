@@ -125,8 +125,12 @@
                     android:text="--"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:textColor="?attr/colorOnSurface"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
+                    android:singleLine="true"
+                    android:ellipsize="marquee"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:scrollHorizontally="true" />
 
                 <ImageButton
                     android:id="@+id/btnFavorite"
@@ -147,8 +151,12 @@
                 android:layout_marginTop="2dp"
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:maxLines="1"
-                android:ellipsize="end" />
+                android:singleLine="true"
+                android:ellipsize="marquee"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:scrollHorizontally="true" />
 
             <TextView
                 android:id="@+id/audioFormatInfo"

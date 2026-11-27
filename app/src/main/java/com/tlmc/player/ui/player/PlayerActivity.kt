@@ -79,6 +79,7 @@ class PlayerActivity : AppCompatActivity() {
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
     private var isSeeking = false
     private var eqDialog: AlertDialog? = null
+    private var activePlaylistDialogRefresh: (() -> Unit)? = null
 
     // true when opened from CUE file (needs to load & set media items)
     private var isCueMode = false
@@ -180,12 +181,22 @@ class PlayerActivity : AppCompatActivity() {
                 runOnUiThread { updatePlayPauseButton(isPlaying) }
             }
 
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                runOnUiThread { activePlaylistDialogRefresh?.invoke() }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                runOnUiThread { updateCurrentTrackInfo() }
+                runOnUiThread {
+                    updateCurrentTrackInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-                runOnUiThread { updateCurrentTrackInfo() }
+                runOnUiThread {
+                    updateCurrentTrackInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -396,10 +407,17 @@ class PlayerActivity : AppCompatActivity() {
     private fun updateCurrentTrackInfo() {
         mediaController?.let { controller ->
             val mediaItem = controller.currentMediaItem
-            val title = mediaItem?.mediaMetadata?.title?.toString() ?: ""
-            val artist = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
+            val title = mediaItem?.mediaMetadata?.title?.toString()
+                ?.takeIf { it.isNotEmpty() }
+                ?: controller.mediaMetadata.title?.toString().orEmpty()
+            val artist = mediaItem?.mediaMetadata?.artist?.toString()
+                ?.takeIf { it.isNotEmpty() }
+                ?: controller.mediaMetadata.artist?.toString().orEmpty()
             binding.trackTitle.text = title.ifEmpty { "Unknown" }
+            binding.trackTitle.isSelected = true
             binding.trackArtist.text = artist
+            binding.trackArtist.visibility = if (artist.isNotEmpty()) View.VISIBLE else View.GONE
+            binding.trackArtist.isSelected = true
 
             val artwork = ArtworkUtils.decodeArtwork(mediaItem?.mediaMetadata?.artworkData)
             if (artwork != null) {
@@ -680,6 +698,14 @@ class PlayerActivity : AppCompatActivity() {
         recyclerView.apply {
             layoutManager = LinearLayoutManager(this@PlayerActivity)
             adapter = playlistAdapter
+        }
+
+        activePlaylistDialogRefresh = {
+            refreshPlaylistDialog(controller, recyclerView, emptyView)
+            dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+        }
+        dialog.setOnDismissListener {
+            activePlaylistDialogRefresh = null
         }
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)

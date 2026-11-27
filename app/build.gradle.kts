@@ -22,8 +22,8 @@ android {
         applicationId = "com.tlmc.player"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10013
-        versionName = "1.0.13"
+        versionCode = 10014
+        versionName = "1.0.14"
     }
 
     signingConfigs {

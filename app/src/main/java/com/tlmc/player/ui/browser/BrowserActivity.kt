@@ -80,6 +80,7 @@ class BrowserActivity : AppCompatActivity() {
 
     private var lastDownloadActive = false
     private var pendingOfflinePathText: TextView? = null
+    private var activePlaylistDialogRefresh: (() -> Unit)? = null
 
     private val openOfflineTree = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -740,12 +741,22 @@ class BrowserActivity : AppCompatActivity() {
                 runOnUiThread { updateMiniPlayerControls() }
             }
 
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                runOnUiThread { activePlaylistDialogRefresh?.invoke() }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                runOnUiThread { updateMiniPlayerInfo() }
+                runOnUiThread {
+                    updateMiniPlayerInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-                runOnUiThread { updateMiniPlayerInfo() }
+                runOnUiThread {
+                    updateMiniPlayerInfo()
+                    activePlaylistDialogRefresh?.invoke()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -878,8 +889,12 @@ class BrowserActivity : AppCompatActivity() {
     private fun updateMiniPlayerInfo() {
         val controller = mediaController ?: return
         val mediaItem = controller.currentMediaItem
+        val artist = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
         binding.miniPlayerTitle.text = mediaItem?.mediaMetadata?.title?.toString() ?: "未知曲目"
-        binding.miniPlayerArtist.text = mediaItem?.mediaMetadata?.artist?.toString() ?: ""
+        binding.miniPlayerTitle.isSelected = true
+        binding.miniPlayerArtist.text = artist
+        binding.miniPlayerArtist.visibility = if (artist.isNotEmpty()) View.VISIBLE else View.GONE
+        binding.miniPlayerArtist.isSelected = true
 
         val artwork = ArtworkUtils.decodeArtwork(mediaItem?.mediaMetadata?.artworkData)
         if (artwork != null) {
@@ -1133,6 +1148,14 @@ class BrowserActivity : AppCompatActivity() {
                 tracks,
                 "将当前播放列表添加到歌单"
             )
+        }
+
+        activePlaylistDialogRefresh = {
+            refreshPlaylistDialog(controller, recyclerView, emptyView)
+            dialog.setTitle("播放列表 (${controller.mediaItemCount})")
+        }
+        dialog.setOnDismissListener {
+            activePlaylistDialogRefresh = null
         }
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)

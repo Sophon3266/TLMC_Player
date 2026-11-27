@@ -28,6 +28,8 @@ import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.util.FileUtils
+import com.tlmc.player.util.FlacCueExtractor
+import com.tlmc.player.util.FlacMetadata
 import com.tlmc.player.ui.browser.BrowserActivity
 import com.tlmc.player.data.model.ServerConfig
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,6 +38,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -71,6 +75,9 @@ class PlayerService : MediaSessionService() {
     private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val artworkCache = HashMap<String, ByteArray?>()
     private val artworkLoading = HashSet<String>()
+    private val flacMetadataCache = HashMap<String, FlacMetadata?>()
+    private val flacMetadataLoading = HashSet<String>()
+    private val flacMetadataSemaphore = Semaphore(4)
     private val coverNames = setOf("cover", "folder", "front", "album", "albumart", "artwork")
     private val handler = Handler(Looper.getMainLooper())
     private val saveProgressRunnable = object : Runnable {
@@ -147,6 +154,7 @@ class PlayerService : MediaSessionService() {
 
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
                 saveQueueState(player)
+                requestFlacMetadata(player)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -162,6 +170,7 @@ class PlayerService : MediaSessionService() {
                 }
                 savePlaybackState(player)
                 requestArtwork(player)
+                requestFlacMetadata(player)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -205,6 +214,7 @@ class PlayerService : MediaSessionService() {
                         audioEqualizer.attach(player.audioSessionId)
                         resetPlaybackRecovery()
                         requestArtwork(player)
+                        requestFlacMetadata(player)
                     }
                     Player.STATE_BUFFERING -> {
                         // 切轨/网络波动时通常几秒；超时仍未恢复则重建播放源
@@ -250,6 +260,7 @@ class PlayerService : MediaSessionService() {
         })
 
         restoreQueueState(player)
+        requestFlacMetadata(player)
 
         // 点击通知回到应用，后台播放时仍可继续控制
         val sessionActivity = PendingIntent.getActivity(
@@ -529,6 +540,180 @@ class PlayerService : MediaSessionService() {
         }
     }
 
+    // ==================== FLAC Metadata ====================
+
+    /**
+     * 为播放列表中的非 CUE FLAC 曲目异步提取内嵌曲名、歌手与专辑信息，
+     * 使播放列表与播放界面优先显示内嵌标签而非文件名；若无内嵌曲名则保留文件名。
+     */
+    private fun requestFlacMetadata(player: Player) {
+        val count = player.mediaItemCount
+        if (count == 0) return
+
+        val currentIdx = player.currentMediaItemIndex
+        val orderedIndices = buildList {
+            if (currentIdx in 0 until count) add(currentIdx)
+            for (i in 0 until count) {
+                if (i != currentIdx) add(i)
+            }
+        }
+
+        for (index in orderedIndices) {
+            val mediaItem = player.getMediaItemAt(index)
+            if (isCueClippedItem(mediaItem)) continue
+            if (mediaItem.mediaMetadata.extras?.getBoolean(KEY_FLAC_METADATA_RESOLVED, false) == true) continue
+
+            val key = flacMetadataKey(mediaItem) ?: continue
+
+            var shouldLoad = false
+            var hasCached = false
+            var cached: FlacMetadata? = null
+            synchronized(flacMetadataCache) {
+                if (flacMetadataCache.containsKey(key)) {
+                    hasCached = true
+                    cached = flacMetadataCache[key]
+                } else if (flacMetadataLoading.add(key)) {
+                    shouldLoad = true
+                }
+            }
+
+            if (hasCached) {
+                applyFlacMetadata(player, index, key, cached)
+                continue
+            }
+
+            if (!shouldLoad) continue
+
+            artworkScope.launch {
+                val metadata = flacMetadataSemaphore.withPermit {
+                    try {
+                        loadFlacMetadata(mediaItem, key)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                handler.post {
+                    synchronized(flacMetadataCache) {
+                        flacMetadataCache[key] = metadata
+                        flacMetadataLoading.remove(key)
+                    }
+                    val currentPlayer = mediaSession?.player ?: return@post
+                    for (i in 0 until currentPlayer.mediaItemCount) {
+                        val item = currentPlayer.getMediaItemAt(i)
+                        if (flacMetadataKey(item) == key) {
+                            applyFlacMetadata(currentPlayer, i, key, metadata)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isCueClippedItem(mediaItem: MediaItem): Boolean {
+        val clip = mediaItem.clippingConfiguration
+        return clip.startPositionMs > 0L || clip.endPositionMs != C.TIME_END_OF_SOURCE
+    }
+
+    private fun flacMetadataKey(mediaItem: MediaItem): String? {
+        val mediaId = mediaItem.mediaId
+        val uriStr = mediaItem.localConfiguration?.uri?.toString().orEmpty()
+        val mimeType = mediaItem.localConfiguration?.mimeType.orEmpty()
+        val title = mediaItem.mediaMetadata.title?.toString().orEmpty()
+
+        val isFlac = mimeType.contains("flac", ignoreCase = true) ||
+            mediaId.lowercase(Locale.ROOT).endsWith(".flac") ||
+            uriStr.lowercase(Locale.ROOT).endsWith(".flac") ||
+            title.lowercase(Locale.ROOT).endsWith(".flac")
+
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            return if (isFlac || mediaItem.mediaMetadata.artist.isNullOrEmpty()) "local:$mediaId" else null
+        }
+        if (mediaId.isNotEmpty() && isFlac) {
+            return "remote:$mediaId"
+        }
+        return null
+    }
+
+    private suspend fun loadFlacMetadata(mediaItem: MediaItem, key: String): FlacMetadata? {
+        if (key.startsWith("local:")) {
+            val uri = Uri.parse(key.removePrefix("local:"))
+            val headerBytes = try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val buf = ByteArray(2_097_152)
+                    val read = input.read(buf)
+                    if (read > 0) buf.copyOf(read) else ByteArray(0)
+                }
+            } catch (_: Exception) {
+                null
+            }
+            val flacMeta = headerBytes?.let { FlacCueExtractor.extractMetadata(it) }
+            if (flacMeta != null && (flacMeta.title.isNotEmpty() || flacMeta.artist.isNotEmpty())) {
+                return flacMeta
+            }
+            return extractLocalMetadataWithRetriever(uri)
+        }
+        val remotePath = key.removePrefix("remote:")
+        return repository.loadFlacMetadata(remotePath).getOrNull()
+    }
+
+    private fun extractLocalMetadataWithRetriever(uri: Uri): FlacMetadata? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(this, uri)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim().orEmpty()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)?.trim().orEmpty()
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim().orEmpty()
+            FlacMetadata(title = title, artist = artist, album = album)
+        } catch (_: Exception) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {
+                // 忽略
+            }
+        }
+    }
+
+    private fun applyFlacMetadata(
+        player: Player,
+        mediaItemIndex: Int,
+        key: String,
+        metadata: FlacMetadata?
+    ) {
+        if (mediaItemIndex !in 0 until player.mediaItemCount) return
+        val mediaItem = player.getMediaItemAt(mediaItemIndex)
+        if (flacMetadataKey(mediaItem) != key) return
+        if (mediaItem.mediaMetadata.extras?.getBoolean(KEY_FLAC_METADATA_RESOLVED, false) == true) return
+
+        val metaBuilder = mediaItem.mediaMetadata.buildUpon()
+        if (metadata != null) {
+            if (metadata.title.isNotBlank()) {
+                metaBuilder.setTitle(metadata.title)
+            }
+            if (metadata.artist.isNotBlank()) {
+                metaBuilder.setArtist(metadata.artist)
+            }
+            if (metadata.album.isNotBlank() && mediaItem.mediaMetadata.albumTitle.isNullOrEmpty()) {
+                metaBuilder.setAlbumTitle(metadata.album)
+            }
+        }
+        val newExtras = Bundle(mediaItem.mediaMetadata.extras ?: Bundle()).apply {
+            putBoolean(KEY_FLAC_METADATA_RESOLVED, true)
+        }
+        metaBuilder.setExtras(newExtras)
+
+        val updated = mediaItem.buildUpon()
+            .setMediaMetadata(metaBuilder.build())
+            .build()
+        try {
+            player.replaceMediaItem(mediaItemIndex, updated)
+        } catch (_: Exception) {
+            // 元数据更新失败不影响播放
+        }
+    }
+
     private fun savePlaybackState(player: Player) {
         saveQueueState(player)
 
@@ -665,6 +850,7 @@ class PlayerService : MediaSessionService() {
         private const val MAX_PLAYBACK_RECOVERY_ATTEMPTS = 3
         private const val PLAYBACK_RECOVERY_DELAY_MS = 1_500L
         private const val STUCK_BUFFERING_TIMEOUT_MS = 20_000L
+        private const val KEY_FLAC_METADATA_RESOLVED = "tlmc_flac_metadata_resolved"
     }
 }
 
