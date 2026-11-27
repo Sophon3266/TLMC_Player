@@ -27,6 +27,7 @@ captures/
 # Signing files
 *.jks
 *.keystore
+keystore.properties
 
 # Logs and temp
 *.log
