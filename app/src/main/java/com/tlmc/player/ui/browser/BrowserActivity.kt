@@ -49,12 +49,14 @@ import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.data.repository.OfflineManager
 import com.tlmc.player.databinding.ActivityBrowserBinding
 import com.tlmc.player.ui.gallery.GalleryActivity
+import com.tlmc.player.ui.library.LibraryActivity
 import com.tlmc.player.ui.player.PlayerActivity
 import com.tlmc.player.ui.player.PlayerService
 import com.tlmc.player.ui.text.TextActivity
 import com.tlmc.player.util.ArtworkUtils
 import com.tlmc.player.util.FileUtils
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -432,12 +434,15 @@ class BrowserActivity : AppCompatActivity() {
     private fun handleAudioFileClick(file: WebDavFile) {
         val controller = mediaController
 
-        // Check if this file is already in the playlist
+        // Check if this file is already in the playlist (only auto-switch if not a single unsplit FLAC)
         if (controller != null && controller.mediaItemCount > 0) {
             val fileUrl = viewModel.getFileUrl(file.path)
             for (i in 0 until controller.mediaItemCount) {
-                val itemUri = controller.getMediaItemAt(i).localConfiguration?.uri?.toString() ?: ""
-                if (itemUri == fileUrl) {
+                val item = controller.getMediaItemAt(i)
+                val itemUri = item.localConfiguration?.uri?.toString() ?: ""
+                val isUnsplitFlac = file.extension == "flac" &&
+                    item.clippingConfiguration.endPositionMs == androidx.media3.common.C.TIME_END_OF_SOURCE
+                if (itemUri == fileUrl && !isUnsplitFlac) {
                     // Already in playlist, just switch to it
                     controller.seekTo(i, 0)
                     if (controller.playbackState == Player.STATE_IDLE) {
@@ -460,14 +465,54 @@ class BrowserActivity : AppCompatActivity() {
                 .setTitle(file.name)
                 .setItems(options) { _, which ->
                     when (which) {
-                        0 -> playSingleFile(file)
+                        0 -> playSingleOrEmbeddedCue(file)
                         1 -> playFolderAudioFiles(file, audioFiles)
                     }
                 }
                 .show()
         } else {
-            playSingleFile(file)
+            playSingleOrEmbeddedCue(file)
         }
+    }
+
+    private fun playSingleOrEmbeddedCue(file: WebDavFile) {
+        if (file.extension == "flac") {
+            val hasExternalCue = viewModel.directoryFiles.value?.any {
+                it.isCue && it.nameWithoutExtension == file.nameWithoutExtension
+            } == true
+            if (!hasExternalCue) {
+                Toast.makeText(this, "正在检测 FLAC 内嵌分轨...", Toast.LENGTH_SHORT).show()
+                lifecycleScope.launch {
+                    val embeddedCue = viewModel.loadEmbeddedFlacCue(file.path)
+                    if (embeddedCue != null && embeddedCue.tracks.size > 1) {
+                        MaterialAlertDialogBuilder(this@BrowserActivity)
+                            .setTitle(file.name)
+                            .setMessage("检测到 FLAC 内嵌 CUESHEET（共 ${embeddedCue.tracks.size} 首曲目）")
+                            .setPositiveButton("分轨播放") { _, _ ->
+                                openPlayerFromEmbeddedFlacCue(file)
+                            }
+                            .setNegativeButton("整轨播放") { _, _ ->
+                                playSingleFile(file)
+                            }
+                            .show()
+                    } else {
+                        playSingleFile(file)
+                    }
+                }
+                return
+            }
+        }
+        playSingleFile(file)
+    }
+
+    private fun openPlayerFromEmbeddedFlacCue(flacFile: WebDavFile) {
+        val intent = Intent(this, PlayerActivity::class.java).apply {
+            putExtra(PlayerActivity.EXTRA_FILE_PATH, flacFile.path)
+            putExtra(PlayerActivity.EXTRA_FILE_NAME, flacFile.name)
+            putExtra(PlayerActivity.EXTRA_USE_EMBEDDED_CUE, true)
+            putExtra(PlayerActivity.EXTRA_DIRECTORY_PATH, viewModel.currentPath.value ?: "/")
+        }
+        startActivity(intent)
     }
 
     private fun playSingleFile(file: WebDavFile) {
@@ -528,7 +573,12 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun onFileLongClicked(file: WebDavFile): Boolean {
         if (file.isDirectory) {
-            val options = arrayOf("文件夹信息", "批量离线下载")
+            val options = arrayOf(
+                "文件夹信息",
+                "批量离线下载",
+                "收藏此目录全部音频",
+                "添加到自定义歌单"
+            )
             MaterialAlertDialogBuilder(this)
                 .setTitle(file.name)
                 .setItems(options) { _, which ->
@@ -538,6 +588,8 @@ class BrowserActivity : AppCompatActivity() {
                             Toast.makeText(this, "开始离线下载「${file.name}」...", Toast.LENGTH_SHORT).show()
                             offlineManager.downloadDirectory(file)
                         }
+                        2 -> batchFavoriteDirectory(file)
+                        3 -> batchAddDirectoryToPlaylist(file)
                     }
                 }
                 .show()
@@ -550,7 +602,7 @@ class BrowserActivity : AppCompatActivity() {
                         0 -> showFileInfo(file)
                         1 -> addToPlaylist(file)
                         2 -> {
-                            if (file.isCue) openPlayerFromCue(file) else playSingleFile(file)
+                            if (file.isCue) openPlayerFromCue(file) else playSingleOrEmbeddedCue(file)
                         }
                         3 -> downloadFile(file)
                     }
@@ -939,6 +991,33 @@ class BrowserActivity : AppCompatActivity() {
         playMediaItemsDirectly(records.map { it.toMediaItem() }, startIndex)
     }
 
+    private fun collectControllerTracks(controller: MediaController): List<TrackRecord> {
+        return buildList {
+            for (i in 0 until controller.mediaItemCount) {
+                TrackRecord.fromMediaItem(controller.getMediaItemAt(i))?.let(::add)
+            }
+        }
+    }
+
+    private fun batchFavoriteDirectory(dir: WebDavFile) {
+        lifecycleScope.launch {
+            val tracks = viewModel.collectDirectoryAudioRecords(dir)
+            PlaylistBatchHelper.favoriteTracks(this@BrowserActivity, libraryManager, tracks)
+        }
+    }
+
+    private fun batchAddDirectoryToPlaylist(dir: WebDavFile) {
+        lifecycleScope.launch {
+            val tracks = viewModel.collectDirectoryAudioRecords(dir)
+            PlaylistBatchHelper.showAddTracksToPlaylistDialog(
+                this@BrowserActivity,
+                libraryManager,
+                tracks,
+                "将「${dir.name}」添加到歌单"
+            )
+        }
+    }
+
     internal fun playMediaItemsDirectly(items: List<MediaItem>, startIndex: Int = 0) {
         if (items.isEmpty()) return
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
@@ -1018,6 +1097,23 @@ class BrowserActivity : AppCompatActivity() {
                 }
                 .setNegativeButton("取消", null)
                 .show()
+        }
+
+        val favoriteAllButton = dialogView.findViewById<Button>(R.id.favoriteAllButton)
+        favoriteAllButton.setOnClickListener {
+            val tracks = collectControllerTracks(controller)
+            PlaylistBatchHelper.favoriteTracks(this@BrowserActivity, libraryManager, tracks)
+        }
+
+        val addAllToPlaylistButton = dialogView.findViewById<Button>(R.id.addAllToPlaylistButton)
+        addAllToPlaylistButton.setOnClickListener {
+            val tracks = collectControllerTracks(controller)
+            PlaylistBatchHelper.showAddTracksToPlaylistDialog(
+                this@BrowserActivity,
+                libraryManager,
+                tracks,
+                "将当前播放列表添加到歌单"
+            )
         }
 
         refreshPlaylistDialog(controller, recyclerView, emptyView)
@@ -1214,11 +1310,21 @@ class BrowserActivity : AppCompatActivity() {
                 true
             }
             R.id.action_library -> {
-                showLibraryDialog()
+                startActivity(
+                    Intent(this, LibraryActivity::class.java).putExtra(
+                        LibraryActivity.EXTRA_INITIAL_TAB,
+                        LibraryActivity.TAB_FAVORITES
+                    )
+                )
                 true
             }
             R.id.action_offline_library -> {
-                showOfflineLibraryDialog()
+                startActivity(
+                    Intent(this, LibraryActivity::class.java).putExtra(
+                        LibraryActivity.EXTRA_INITIAL_TAB,
+                        LibraryActivity.TAB_OFFLINE
+                    )
+                )
                 true
             }
             R.id.action_open_local -> {

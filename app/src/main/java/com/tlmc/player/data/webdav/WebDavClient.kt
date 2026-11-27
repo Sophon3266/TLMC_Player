@@ -95,6 +95,42 @@ class WebDavClient @Inject constructor(
         }
     }
 
+    suspend fun downloadFileRange(
+        path: String,
+        startByte: Long,
+        endByteInclusive: Long
+    ): Result<ByteArray> = withContext(Dispatchers.IO) {
+        try {
+            val url = buildUrl(path)
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", getAuthHeader())
+                .header("Range", "bytes=$startByte-$endByteInclusive")
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful && response.code != 206) {
+                return@withContext Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
+            }
+
+            val maxLen = (endByteInclusive - startByte + 1).toInt().coerceAtLeast(1)
+            val stream = response.body?.byteStream() ?: return@withContext Result.success(ByteArray(0))
+            val buffer = ByteArray(maxLen)
+            var totalRead = 0
+            stream.use { input ->
+                while (totalRead < maxLen) {
+                    val read = input.read(buffer, totalRead, maxLen - totalRead)
+                    if (read <= 0) break
+                    totalRead += read
+                }
+            }
+            Result.success(if (totalRead == maxLen) buffer else buffer.copyOf(totalRead))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun downloadFileAsString(path: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val url = buildUrl(path)

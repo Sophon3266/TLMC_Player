@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.cache.SimpleCache
 import com.bumptech.glide.Glide
 import com.tlmc.player.data.model.WebDavFile
+import com.tlmc.player.util.DownloadNotificationHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -125,9 +126,24 @@ class OfflineManager @Inject constructor(
             _downloadProgress.postValue(
                 BatchDownloadProgress(active = true, albumName = dir.name, completed = 0, total = 0)
             )
+            DownloadNotificationHelper.showProgress(
+                context = context,
+                notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                title = "离线下载：${dir.name}",
+                content = "正在获取文件列表...",
+                progress = 0,
+                max = 0,
+                indeterminate = true
+            )
             try {
                 val filesToDownload = collectDownloadableFiles(dir.path)
                 if (filesToDownload.isEmpty()) {
+                    DownloadNotificationHelper.showCompleted(
+                        context = context,
+                        notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                        title = "离线下载：${dir.name}",
+                        content = "目录中没有可下载的文件"
+                    )
                     _downloadProgress.postValue(
                         BatchDownloadProgress(
                             active = false,
@@ -147,6 +163,15 @@ class OfflineManager @Inject constructor(
                 val total = filesToDownload.size
                 _downloadProgress.postValue(
                     BatchDownloadProgress(active = true, albumName = dir.name, completed = 0, total = total)
+                )
+                DownloadNotificationHelper.showProgress(
+                    context = context,
+                    notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                    title = "离线下载：${dir.name}",
+                    content = "准备下载 $total 个文件",
+                    progress = 0,
+                    max = total,
+                    indeterminate = false
                 )
 
                 for (remoteFile in filesToDownload) {
@@ -173,8 +198,23 @@ class OfflineManager @Inject constructor(
                             total = total
                         )
                     )
+                    DownloadNotificationHelper.showProgress(
+                        context = context,
+                        notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                        title = "离线下载：${dir.name}",
+                        content = "已完成 $completed / $total：${remoteFile.name}",
+                        progress = completed,
+                        max = total,
+                        indeterminate = false
+                    )
                 }
 
+                DownloadNotificationHelper.showCompleted(
+                    context = context,
+                    notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                    title = "离线下载完成：${dir.name}",
+                    content = "共下载 $completed / $total 个文件"
+                )
                 _downloadProgress.postValue(
                     BatchDownloadProgress(
                         active = false,
@@ -184,9 +224,21 @@ class OfflineManager @Inject constructor(
                     )
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
+                DownloadNotificationHelper.showCompleted(
+                    context = context,
+                    notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                    title = "离线下载已取消",
+                    content = dir.name
+                )
                 _downloadProgress.postValue(BatchDownloadProgress(active = false))
                 throw e
             } catch (e: Exception) {
+                DownloadNotificationHelper.showCompleted(
+                    context = context,
+                    notificationId = DownloadNotificationHelper.NOTIFICATION_ID_BATCH,
+                    title = "离线下载失败：${dir.name}",
+                    content = e.message ?: "下载失败"
+                )
                 _downloadProgress.postValue(
                     BatchDownloadProgress(
                         active = false,

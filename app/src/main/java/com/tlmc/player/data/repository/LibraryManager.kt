@@ -79,6 +79,29 @@ class LibraryManager @Inject constructor(
         publishAll()
     }
 
+    /** 批量添加到红心收藏，返回新加入的曲目数量。 */
+    fun addFavorites(tracks: List<TrackRecord>): Int {
+        if (tracks.isEmpty()) return 0
+        var addedCount = 0
+        val now = System.currentTimeMillis()
+        synchronized(lock) {
+            val existingKeys = favoritesList.mapTo(HashSet()) { it.key }
+            val toAdd = mutableListOf<TrackRecord>()
+            for (track in tracks) {
+                if (existingKeys.add(track.key)) {
+                    toAdd.add(track.copy(timestampMs = now))
+                    addedCount++
+                }
+            }
+            if (toAdd.isNotEmpty()) {
+                favoritesList.addAll(0, toAdd)
+                saveToDiskLocked()
+            }
+        }
+        if (addedCount > 0) publishAll()
+        return addedCount
+    }
+
     fun getFavorites(): List<TrackRecord> = synchronized(lock) { favoritesList.toList() }
 
     fun getPlaylists(): List<CustomPlaylist> = synchronized(lock) { playlistsList.toList() }
@@ -122,22 +145,33 @@ class LibraryManager @Inject constructor(
 
     /** 将曲目添加到指定歌单（若已存在则不重复添加），返回是否成功添加。 */
     fun addTrackToPlaylist(playlistId: String, track: TrackRecord): Boolean {
-        val added: Boolean
+        return addTracksToPlaylist(playlistId, listOf(track)) > 0
+    }
+
+    /** 批量将曲目添加到指定歌单（自动去重），返回新加入的曲目数量。 */
+    fun addTracksToPlaylist(playlistId: String, tracks: List<TrackRecord>): Int {
+        if (tracks.isEmpty()) return 0
+        var addedCount = 0
+        val now = System.currentTimeMillis()
         synchronized(lock) {
             val index = playlistsList.indexOfFirst { it.id == playlistId }
-            if (index < 0) return false
+            if (index < 0) return 0
             val current = playlistsList[index]
-            if (current.tracks.any { it.key == track.key }) {
-                added = false
-            } else {
-                val updatedTracks = current.tracks + track.copy(timestampMs = System.currentTimeMillis())
-                playlistsList[index] = current.copy(tracks = updatedTracks)
+            val existingKeys = current.tracks.mapTo(HashSet()) { it.key }
+            val toAdd = mutableListOf<TrackRecord>()
+            for (track in tracks) {
+                if (existingKeys.add(track.key)) {
+                    toAdd.add(track.copy(timestampMs = now))
+                    addedCount++
+                }
+            }
+            if (toAdd.isNotEmpty()) {
+                playlistsList[index] = current.copy(tracks = current.tracks + toAdd)
                 saveToDiskLocked()
-                added = true
             }
         }
-        if (added) publishAll()
-        return added
+        if (addedCount > 0) publishAll()
+        return addedCount
     }
 
     fun removeTrackFromPlaylist(playlistId: String, trackKey: String) {

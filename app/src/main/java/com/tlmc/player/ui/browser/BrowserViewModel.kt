@@ -201,6 +201,15 @@ class BrowserViewModel @Inject constructor(
 
     fun downloadFileToLocal(file: WebDavFile, context: android.content.Context) {
         viewModelScope.launch(Dispatchers.IO) {
+            com.tlmc.player.util.DownloadNotificationHelper.showProgress(
+                context = context,
+                notificationId = com.tlmc.player.util.DownloadNotificationHelper.NOTIFICATION_ID_SINGLE,
+                title = "正在下载：${file.name}",
+                content = "下载中...",
+                progress = 0,
+                max = 0,
+                indeterminate = true
+            )
             try {
                 val outputStream: java.io.OutputStream = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                     val contentValues = android.content.ContentValues().apply {
@@ -234,11 +243,29 @@ class BrowserViewModel @Inject constructor(
                 outputStream.close()
 
                 result.onSuccess {
+                    com.tlmc.player.util.DownloadNotificationHelper.showCompleted(
+                        context = context,
+                        notificationId = com.tlmc.player.util.DownloadNotificationHelper.NOTIFICATION_ID_SINGLE,
+                        title = "下载完成：${file.name}",
+                        content = "已保存到 Download/TLMC/${file.name}"
+                    )
                     _downloadResult.postValue(Result.success("Download/TLMC/${file.name}"))
                 }.onFailure { e ->
+                    com.tlmc.player.util.DownloadNotificationHelper.showCompleted(
+                        context = context,
+                        notificationId = com.tlmc.player.util.DownloadNotificationHelper.NOTIFICATION_ID_SINGLE,
+                        title = "下载失败：${file.name}",
+                        content = e.message ?: "下载失败"
+                    )
                     _downloadResult.postValue(Result.failure(e))
                 }
             } catch (e: Exception) {
+                com.tlmc.player.util.DownloadNotificationHelper.showCompleted(
+                    context = context,
+                    notificationId = com.tlmc.player.util.DownloadNotificationHelper.NOTIFICATION_ID_SINGLE,
+                    title = "下载失败：${file.name}",
+                    content = e.message ?: "下载失败"
+                )
                 _downloadResult.postValue(Result.failure(e))
             }
         }
@@ -250,6 +277,25 @@ class BrowserViewModel @Inject constructor(
 
     fun getFileUrl(path: String): String {
         return repository.getFileUrl(path)
+    }
+
+    suspend fun loadEmbeddedFlacCue(flacPath: String): com.tlmc.player.data.model.CueSheet? {
+        return repository.loadEmbeddedFlacCueSheet(flacPath).getOrNull()
+    }
+
+    suspend fun collectDirectoryAudioRecords(dir: WebDavFile): List<com.tlmc.player.data.model.TrackRecord> {
+        val entries = repository.listFiles(dir.path).getOrNull() ?: return emptyList()
+        return entries.filter { !it.isDirectory && it.isAudio }.map { audio ->
+            val url = repository.getFileUrl(audio.path)
+            com.tlmc.player.data.model.TrackRecord(
+                key = audio.path,
+                mediaId = audio.path,
+                uri = url,
+                title = audio.nameWithoutExtension.ifEmpty { audio.name },
+                albumTitle = dir.name,
+                directoryPath = dir.path
+            )
+        }
     }
 
     fun getConfig(): ServerConfig = configManager.getConfig()

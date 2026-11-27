@@ -44,6 +44,37 @@ class WebDavRepository @Inject constructor(
         }
     }
 
+    suspend fun loadEmbeddedFlacCueSheet(flacPath: String): Result<CueSheet?> {
+        return runCatching {
+            val headerBytes = if (flacPath.startsWith("file://") || java.io.File(flacPath).exists()) {
+                val localFile = if (flacPath.startsWith("file://")) {
+                    java.io.File(android.net.Uri.parse(flacPath).path ?: flacPath)
+                } else {
+                    java.io.File(flacPath)
+                }
+                localFile.inputStream().use { input ->
+                    val buf = ByteArray(1_048_576)
+                    val read = input.read(buf)
+                    if (read > 0) buf.copyOf(read) else ByteArray(0)
+                }
+            } else {
+                // 先拉取前 256KB；若内嵌封面较大导致元数据块被截断，再扩展到 2MB
+                val firstChunk = webDavClient.downloadFileRange(flacPath, 0L, 262_143L).getOrThrow()
+                val fileName = flacPath.substringAfterLast('/')
+                val quickParse = com.tlmc.player.util.FlacCueExtractor.extract(
+                    firstChunk,
+                    fileName.substringBeforeLast('.')
+                )
+                if (quickParse != null) {
+                    return@runCatching quickParse
+                }
+                webDavClient.downloadFileRange(flacPath, 0L, 2_097_151L).getOrThrow()
+            }
+            val fileName = flacPath.substringAfterLast('/')
+            com.tlmc.player.util.FlacCueExtractor.extract(headerBytes, fileName.substringBeforeLast('.'))
+        }
+    }
+
     fun getFileUrl(path: String): String {
         return webDavClient.getAuthenticatedUrl(path)
     }

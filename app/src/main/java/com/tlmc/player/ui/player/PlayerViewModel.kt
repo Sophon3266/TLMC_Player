@@ -57,7 +57,12 @@ class PlayerViewModel @Inject constructor(
     // Directory path used for finding LRC files
     private var directoryPath: String = "/"
 
-    fun initialize(filePath: String?, cuePath: String?, directoryPath: String) {
+    fun initialize(
+        filePath: String?,
+        cuePath: String?,
+        directoryPath: String,
+        useEmbeddedCue: Boolean = false
+    ) {
         this.directoryPath = directoryPath
         viewModelScope.launch {
             _isLoading.value = true
@@ -67,6 +72,8 @@ class PlayerViewModel @Inject constructor(
                 when {
                     // CUE file specified
                     cuePath != null -> loadWithCue(cuePath, filePath, directoryPath)
+                    // Embedded FLAC CUE
+                    useEmbeddedCue && filePath != null -> loadWithEmbeddedCue(filePath, directoryPath)
                     // Audio file only
                     filePath != null -> loadSingleFile(filePath)
                     else -> _error.value = "无效的文件路径"
@@ -76,6 +83,21 @@ class PlayerViewModel @Inject constructor(
             }
 
             _isLoading.value = false
+        }
+    }
+
+    private suspend fun loadWithEmbeddedCue(filePath: String, directoryPath: String) {
+        val cueSheet = repository.loadEmbeddedFlacCueSheet(filePath).getOrNull()
+        if (cueSheet != null && cueSheet.tracks.isNotEmpty()) {
+            _albumTitle.value = cueSheet.title
+            _albumArtist.value = cueSheet.performer
+            _tracks.value = cueSheet.tracks
+
+            val audioUrl = repository.getFileUrl(filePath)
+            val audioDirectory = FileUtils.getDirectoryPath(filePath).ifEmpty { directoryPath }
+            _mediaItems.value = buildCueMediaItems(cueSheet, audioUrl, audioDirectory)
+        } else {
+            loadSingleFile(filePath)
         }
     }
 

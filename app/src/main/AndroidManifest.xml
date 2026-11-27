@@ -45,6 +45,10 @@
             android:name=".ui.gallery.GalleryActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.library.LibraryActivity"
+            android:exported="false" />
+
         <service
             android:name=".ui.player.PlayerService"
             android:exported="true"

@@ -58,6 +58,7 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_FILE_NAME = "extra_file_name"
         const val EXTRA_CUE_PATH = "extra_cue_path"
         const val EXTRA_DIRECTORY_PATH = "extra_directory_path"
+        const val EXTRA_USE_EMBEDDED_CUE = "extra_use_embedded_cue"
     }
 
     private lateinit var binding: ActivityPlayerBinding
@@ -100,14 +101,15 @@ class PlayerActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         val cuePath = intent.getStringExtra(EXTRA_CUE_PATH)
-        isCueMode = cuePath != null
+        val useEmbeddedCue = intent.getBooleanExtra(EXTRA_USE_EMBEDDED_CUE, false)
+        isCueMode = cuePath != null || useEmbeddedCue
 
         if (isCueMode) {
             val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
             val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "Unknown"
             val directoryPath = intent.getStringExtra(EXTRA_DIRECTORY_PATH) ?: "/"
             supportActionBar?.title = fileName
-            viewModel.initialize(filePath, cuePath, directoryPath)
+            viewModel.initialize(filePath, cuePath, directoryPath, useEmbeddedCue)
         } else {
             supportActionBar?.title = "正在播放"
         }
@@ -696,6 +698,36 @@ class PlayerActivity : AppCompatActivity() {
                 }
                 .setNegativeButton("取消", null)
                 .show()
+        }
+
+        val favoriteAllButton = dialogView.findViewById<Button>(R.id.favoriteAllButton)
+        favoriteAllButton.setOnClickListener {
+            val tracks = collectControllerTracks(controller)
+            com.tlmc.player.ui.browser.PlaylistBatchHelper.favoriteTracks(
+                this@PlayerActivity,
+                libraryManager,
+                tracks
+            )
+            updateFavoriteButton(controller.currentMediaItem)
+        }
+
+        val addAllToPlaylistButton = dialogView.findViewById<Button>(R.id.addAllToPlaylistButton)
+        addAllToPlaylistButton.setOnClickListener {
+            val tracks = collectControllerTracks(controller)
+            com.tlmc.player.ui.browser.PlaylistBatchHelper.showAddTracksToPlaylistDialog(
+                this@PlayerActivity,
+                libraryManager,
+                tracks,
+                "将当前播放列表添加到歌单"
+            )
+        }
+    }
+
+    private fun collectControllerTracks(controller: MediaController): List<TrackRecord> {
+        return buildList {
+            for (i in 0 until controller.mediaItemCount) {
+                TrackRecord.fromMediaItem(controller.getMediaItemAt(i))?.let(::add)
+            }
         }
     }
 
