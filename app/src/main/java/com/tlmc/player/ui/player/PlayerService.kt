@@ -637,43 +637,10 @@ class PlayerService : MediaSessionService() {
     private suspend fun loadFlacMetadata(mediaItem: MediaItem, key: String): FlacMetadata? {
         if (key.startsWith("local:")) {
             val uri = Uri.parse(key.removePrefix("local:"))
-            val headerBytes = try {
-                contentResolver.openInputStream(uri)?.use { input ->
-                    val buf = ByteArray(2_097_152)
-                    val read = input.read(buf)
-                    if (read > 0) buf.copyOf(read) else ByteArray(0)
-                }
-            } catch (_: Exception) {
-                null
-            }
-            val flacMeta = headerBytes?.let { FlacCueExtractor.extractMetadata(it) }
-            if (flacMeta != null && (flacMeta.title.isNotEmpty() || flacMeta.artist.isNotEmpty())) {
-                return flacMeta
-            }
-            return extractLocalMetadataWithRetriever(uri)
+            return FlacCueExtractor.extractLocalMetadata(this, uri)
         }
         val remotePath = key.removePrefix("remote:")
         return repository.loadFlacMetadata(remotePath).getOrNull()
-    }
-
-    private fun extractLocalMetadataWithRetriever(uri: Uri): FlacMetadata? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(this, uri)
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim().orEmpty()
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()
-                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)?.trim().orEmpty()
-            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim().orEmpty()
-            FlacMetadata(title = title, artist = artist, album = album)
-        } catch (_: Exception) {
-            null
-        } finally {
-            try {
-                retriever.release()
-            } catch (_: Exception) {
-                // 忽略
-            }
-        }
     }
 
     private fun applyFlacMetadata(
@@ -712,6 +679,13 @@ class PlayerService : MediaSessionService() {
         } catch (_: Exception) {
             // 元数据更新失败不影响播放
         }
+        libraryManager.updateTrackMetadata(
+            key = TrackRecord.buildKey(updated),
+            title = metadata?.title,
+            artist = metadata?.artist,
+            albumTitle = metadata?.album,
+            metadataResolved = true
+        )
     }
 
     private fun savePlaybackState(player: Player) {

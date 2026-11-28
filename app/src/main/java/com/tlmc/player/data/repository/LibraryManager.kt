@@ -250,6 +250,81 @@ class LibraryManager @Inject constructor(
 
     fun getHistory(): List<TrackRecord> = synchronized(lock) { historyList.toList() }
 
+    /**
+     * 更新已保存曲目的内嵌元数据（如单轨 FLAC 的曲名、艺术家、专辑名）并标记为已解析。
+     */
+    fun updateTrackMetadata(
+        key: String,
+        title: String? = null,
+        artist: String? = null,
+        albumTitle: String? = null,
+        metadataResolved: Boolean = true
+    ): Boolean {
+        if (key.isBlank()) return false
+        var changed = false
+
+        fun TrackRecord.applyUpdate(): TrackRecord {
+            val newTitle = title?.trim()?.takeIf { it.isNotEmpty() } ?: this.title
+            val newArtist = artist?.trim()?.takeIf { it.isNotEmpty() } ?: this.artist
+            val newAlbum = if (this.albumTitle.isBlank()) {
+                albumTitle?.trim()?.takeIf { it.isNotEmpty() } ?: this.albumTitle
+            } else {
+                this.albumTitle
+            }
+            val newResolved = this.metadataResolved || metadataResolved
+            if (newTitle == this.title &&
+                newArtist == this.artist &&
+                newAlbum == this.albumTitle &&
+                newResolved == this.metadataResolved
+            ) {
+                return this
+            }
+            changed = true
+            return copy(
+                title = newTitle,
+                artist = newArtist,
+                albumTitle = newAlbum,
+                metadataResolved = newResolved
+            )
+        }
+
+        synchronized(lock) {
+            for (i in favoritesList.indices) {
+                if (favoritesList[i].key == key) {
+                    favoritesList[i] = favoritesList[i].applyUpdate()
+                }
+            }
+            for (pIdx in playlistsList.indices) {
+                val playlist = playlistsList[pIdx]
+                var playlistChanged = false
+                val updatedTracks = playlist.tracks.map { track ->
+                    if (track.key == key) {
+                        val updated = track.applyUpdate()
+                        if (updated !== track) playlistChanged = true
+                        updated
+                    } else {
+                        track
+                    }
+                }
+                if (playlistChanged) {
+                    playlistsList[pIdx] = playlist.copy(tracks = updatedTracks)
+                }
+            }
+            for (i in historyList.indices) {
+                if (historyList[i].key == key) {
+                    historyList[i] = historyList[i].applyUpdate()
+                }
+            }
+            if (changed) {
+                saveToDiskLocked()
+            }
+        }
+        if (changed) {
+            publishAll()
+        }
+        return changed
+    }
+
     private fun loadFromDisk() {
         synchronized(lock) {
             if (!storageFile.exists()) {

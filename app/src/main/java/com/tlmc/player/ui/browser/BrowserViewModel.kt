@@ -13,6 +13,8 @@ import com.tlmc.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -286,9 +288,21 @@ class BrowserViewModel @Inject constructor(
     }
 
     suspend fun collectDirectoryAudioRecords(dir: WebDavFile): List<com.tlmc.player.data.model.TrackRecord> {
-        val entries = repository.listFiles(dir.path).getOrNull() ?: return emptyList()
+        val visited = HashSet<String>()
+        return collectDirectoryAudioRecordsInternal(dir.path, dir.name, visited, depth = 0)
+    }
+
+    private suspend fun collectDirectoryAudioRecordsInternal(
+        dirPath: String,
+        dirName: String,
+        visited: MutableSet<String>,
+        depth: Int
+    ): List<com.tlmc.player.data.model.TrackRecord> = coroutineScope {
+        if (depth > 3 || !visited.add(dirPath)) return@coroutineScope emptyList()
+        val entries = repository.listFiles(dirPath).getOrNull() ?: return@coroutineScope emptyList()
         val audioFiles = entries.filter { !it.isDirectory && it.isAudio }
         val cueFiles = entries.filter { !it.isDirectory && it.isCue }
+        val subDirs = entries.filter { it.isDirectory }
         val result = mutableListOf<com.tlmc.player.data.model.TrackRecord>()
         val coveredAudioPaths = HashSet<String>()
 
@@ -307,43 +321,74 @@ class BrowserViewModel @Inject constructor(
                     cueSheet.toTrackRecords(
                         audioUri = url,
                         keyPrefix = matchedAudio.path,
-                        directoryPath = dir.path,
-                        fallbackAlbumTitle = dir.name
+                        directoryPath = dirPath,
+                        fallbackAlbumTitle = dirName
                     )
                 )
             }
         }
 
-        for (audio in audioFiles) {
-            if (audio.path in coveredAudioPaths) continue
-            val url = repository.getFileUrl(audio.path)
-            if (audio.extension == "flac") {
-                val embedded = repository.loadEmbeddedFlacCueSheet(audio.path).getOrNull()
-                if (embedded != null && embedded.tracks.size > 1) {
-                    result.addAll(
-                        embedded.toTrackRecords(
-                            audioUri = url,
-                            keyPrefix = audio.path,
-                            directoryPath = dir.path,
-                            fallbackAlbumTitle = dir.name
+        val semaphore = Semaphore(4)
+        val remainingAudioRecords = audioFiles
+            .filter { it.path !in coveredAudioPaths }
+            .map { audio ->
+                async {
+                    val url = repository.getFileUrl(audio.path)
+                    var title = audio.nameWithoutExtension.ifEmpty { audio.name }
+                    var artist = ""
+                    var albumTitle = dirName
+                    var metadataResolved = false
+                    if (audio.extension == "flac") {
+                        val headerResult = semaphore.withPermit {
+                            repository.loadFlacCueAndMetadata(audio.path)
+                        }
+                        val (embedded, flacMeta) = headerResult.getOrNull() ?: (null to null)
+                        if (embedded != null && embedded.tracks.size > 1) {
+                            return@async embedded.toTrackRecords(
+                                audioUri = url,
+                                keyPrefix = audio.path,
+                                directoryPath = dirPath,
+                                fallbackAlbumTitle = dirName
+                            )
+                        }
+                        if (flacMeta != null) {
+                            if (flacMeta.title.isNotBlank()) title = flacMeta.title
+                            if (flacMeta.artist.isNotBlank()) artist = flacMeta.artist
+                            if (flacMeta.album.isNotBlank()) albumTitle = flacMeta.album
+                        }
+                        metadataResolved = headerResult.isSuccess
+                    }
+                    listOf(
+                        com.tlmc.player.data.model.TrackRecord(
+                            key = audio.path,
+                            mediaId = audio.path,
+                            uri = url,
+                            title = title,
+                            artist = artist,
+                            albumTitle = albumTitle,
+                            directoryPath = dirPath,
+                            metadataResolved = metadataResolved
                         )
                     )
-                    continue
                 }
             }
-            result.add(
-                com.tlmc.player.data.model.TrackRecord(
-                    key = audio.path,
-                    mediaId = audio.path,
-                    uri = url,
-                    title = audio.nameWithoutExtension.ifEmpty { audio.name },
-                    albumTitle = dir.name,
-                    directoryPath = dir.path
+            .awaitAll()
+            .flatten()
+
+        result.addAll(remainingAudioRecords)
+
+        for (subDir in subDirs) {
+            result.addAll(
+                collectDirectoryAudioRecordsInternal(
+                    dirPath = subDir.path,
+                    dirName = subDir.name,
+                    visited = visited,
+                    depth = depth + 1
                 )
             )
         }
 
-        return result
+        result
     }
 
     fun getConfig(): ServerConfig = configManager.getConfig()

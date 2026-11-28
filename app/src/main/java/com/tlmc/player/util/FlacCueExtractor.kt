@@ -1,5 +1,8 @@
 package com.tlmc.player.util
 
+import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import com.tlmc.player.data.model.CueSheet
 import com.tlmc.player.data.model.CueTrack
 
@@ -26,6 +29,75 @@ object FlacCueExtractor {
 
     fun extractMetadata(bytes: ByteArray): FlacMetadata? {
         return extractMetadataResult(bytes)?.metadata
+    }
+
+    /**
+     * 判断 FLAC 文件头中的元数据块是否在给定字节数组末尾被截断（尚未读到最后一个元数据块）。
+     */
+    fun isMetadataTruncated(bytes: ByteArray): Boolean {
+        if (bytes.size < 42) return false
+        if (bytes[0] != 0x66.toByte() ||
+            bytes[1] != 0x4C.toByte() ||
+            bytes[2] != 0x61.toByte() ||
+            bytes[3] != 0x43.toByte()
+        ) {
+            return false
+        }
+        var pos = 4
+        while (pos + 4 <= bytes.size) {
+            val header = bytes[pos].toInt() and 0xFF
+            val isLast = (header and 0x80) != 0
+            val blockLength = ((bytes[pos + 1].toInt() and 0xFF) shl 16) or
+                ((bytes[pos + 2].toInt() and 0xFF) shl 8) or
+                (bytes[pos + 3].toInt() and 0xFF)
+            pos += 4
+            if (blockLength < 0 || pos + blockLength > bytes.size) {
+                return true
+            }
+            pos += blockLength
+            if (isLast) return false
+        }
+        return true
+    }
+
+    /**
+     * 从本地音频 URI 提取元数据：优先解析 FLAC VORBIS_COMMENT，若缺失则回退到 MediaMetadataRetriever。
+     */
+    fun extractLocalMetadata(
+        context: Context,
+        uri: Uri,
+        preloadedHeaderBytes: ByteArray? = null
+    ): FlacMetadata? {
+        val headerBytes = preloadedHeaderBytes ?: try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buf = ByteArray(2_097_152)
+                val read = input.read(buf)
+                if (read > 0) buf.copyOf(read) else ByteArray(0)
+            }
+        } catch (_: Exception) {
+            null
+        }
+        val flacMeta = headerBytes?.let { extractMetadata(it) }
+        if (flacMeta != null && (flacMeta.title.isNotEmpty() || flacMeta.artist.isNotEmpty())) {
+            return flacMeta
+        }
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim().orEmpty()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)?.trim().orEmpty()
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim().orEmpty()
+            FlacMetadata(title = title, artist = artist, album = album)
+        } catch (_: Exception) {
+            flacMeta
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {
+                // 忽略
+            }
+        }
     }
 
     fun extractMetadataResult(bytes: ByteArray): FlacMetadataParseResult? {

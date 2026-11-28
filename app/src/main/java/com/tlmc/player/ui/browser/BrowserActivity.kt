@@ -1034,21 +1034,54 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun batchFavoriteDirectory(dir: WebDavFile) {
-        lifecycleScope.launch {
-            val tracks = viewModel.collectDirectoryAudioRecords(dir)
+        runWithDirectoryTracks(dir) { tracks ->
             PlaylistBatchHelper.favoriteTracks(this@BrowserActivity, libraryManager, tracks)
         }
     }
 
     private fun batchAddDirectoryToPlaylist(dir: WebDavFile) {
-        lifecycleScope.launch {
-            val tracks = viewModel.collectDirectoryAudioRecords(dir)
+        runWithDirectoryTracks(dir) { tracks ->
             PlaylistBatchHelper.showAddTracksToPlaylistDialog(
                 this@BrowserActivity,
                 libraryManager,
                 tracks,
                 "将「${dir.name}」添加到歌单"
             )
+        }
+    }
+
+    private fun runWithDirectoryTracks(
+        dir: WebDavFile,
+        onReady: (List<TrackRecord>) -> Unit
+    ) {
+        var job: kotlinx.coroutines.Job? = null
+        val progressDialog = MaterialAlertDialogBuilder(this)
+            .setTitle(dir.name)
+            .setMessage("正在扫描目录中的音频曲目...")
+            .setNegativeButton("取消") { _, _ -> job?.cancel() }
+            .setOnCancelListener { job?.cancel() }
+            .create()
+        progressDialog.show()
+
+        job = lifecycleScope.launch {
+            try {
+                val tracks = viewModel.collectDirectoryAudioRecords(dir)
+                if (progressDialog.isShowing) progressDialog.dismiss()
+                if (!isFinishing && !isDestroyed) {
+                    onReady(tracks)
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                if (progressDialog.isShowing) progressDialog.dismiss()
+            } catch (e: Exception) {
+                if (progressDialog.isShowing) progressDialog.dismiss()
+                if (!isFinishing && !isDestroyed) {
+                    Toast.makeText(
+                        this@BrowserActivity,
+                        "扫描目录失败: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
     }
 

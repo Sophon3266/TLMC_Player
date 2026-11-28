@@ -105,6 +105,41 @@ class WebDavRepository @Inject constructor(
         }
     }
 
+    /**
+     * 单次读取 FLAC 文件头并同时解析内嵌 CUESHEET 与曲目元数据，避免重复下载。
+     */
+    suspend fun loadFlacCueAndMetadata(flacPath: String): Result<Pair<CueSheet?, FlacMetadata?>> {
+        return runCatching {
+            val fileName = flacPath.substringAfterLast('/').substringBeforeLast('.')
+            val headerBytes = if (flacPath.startsWith("file://") || java.io.File(flacPath).exists()) {
+                val localFile = if (flacPath.startsWith("file://")) {
+                    java.io.File(android.net.Uri.parse(flacPath).path ?: flacPath)
+                } else {
+                    java.io.File(flacPath)
+                }
+                localFile.inputStream().use { input ->
+                    val buf = ByteArray(2_097_152)
+                    val read = input.read(buf)
+                    if (read > 0) buf.copyOf(read) else ByteArray(0)
+                }
+            } else {
+                val firstChunk = webDavClient.downloadFileRange(flacPath, 0L, 262_143L).getOrThrow()
+                if (!FlacCueExtractor.isMetadataTruncated(firstChunk)) {
+                    firstChunk
+                } else {
+                    val quickCue = FlacCueExtractor.extract(firstChunk, fileName)
+                    if (quickCue != null && quickCue.tracks.size > 1) {
+                        return@runCatching quickCue to FlacCueExtractor.extractMetadata(firstChunk)
+                    }
+                    webDavClient.downloadFileRange(flacPath, 0L, 2_097_151L).getOrThrow()
+                }
+            }
+            val cue = FlacCueExtractor.extract(headerBytes, fileName)
+            val metadata = FlacCueExtractor.extractMetadata(headerBytes)
+            cue to metadata
+        }
+    }
+
     fun getFileUrl(path: String): String {
         return webDavClient.getAuthenticatedUrl(path)
     }

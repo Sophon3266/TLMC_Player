@@ -39,6 +39,7 @@ import com.tlmc.player.data.model.toTrackRecords
 import com.tlmc.player.data.repository.ConfigManager
 import com.tlmc.player.data.repository.LibraryManager
 import com.tlmc.player.data.repository.OfflineManager
+import com.tlmc.player.data.repository.WebDavRepository
 import com.tlmc.player.databinding.ActivityLibraryBinding
 import com.tlmc.player.ui.browser.BrowserPlaylistAdapter
 import com.tlmc.player.ui.browser.FolderCoverLoader
@@ -51,11 +52,15 @@ import com.tlmc.player.util.CueParser
 import com.tlmc.player.util.EncodingDetector
 import com.tlmc.player.util.FileUtils
 import com.tlmc.player.util.FlacCueExtractor
+import com.tlmc.player.util.FlacMetadata
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Collections
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -82,6 +87,12 @@ class LibraryActivity : AppCompatActivity() {
     @Inject
     lateinit var configManager: ConfigManager
 
+    @Inject
+    lateinit var webDavRepository: WebDavRepository
+
+    private val resolvingFlacKeys = Collections.synchronizedSet(HashSet<String>())
+    private val flacMetadataSemaphore = Semaphore(3)
+
     private lateinit var binding: ActivityLibraryBinding
     private lateinit var adapter: LibraryGalleryAdapter
     private var currentTab = TAB_FAVORITES
@@ -93,6 +104,7 @@ class LibraryActivity : AppCompatActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var pendingMediaItems: Pair<List<MediaItem>, Int>? = null
+    private var pendingSingleTrack: TrackRecord? = null
     private var activePlaylistDialogRefresh: (() -> Unit)? = null
     private var currentPlayMode: PlayMode = PlayMode.SEQUENTIAL
     private var isMiniPlayerSeeking = false
@@ -380,6 +392,7 @@ class LibraryActivity : AppCompatActivity() {
             binding.actionFab.text = "全部播放"
             binding.actionFab.setIconResource(R.drawable.ic_play)
             binding.actionFab.visibility = if (playlist.tracks.isNotEmpty()) View.VISIBLE else View.GONE
+            resolvePendingFlacMetadata(playlist.tracks)
             return
         }
 
@@ -422,6 +435,7 @@ class LibraryActivity : AppCompatActivity() {
                 binding.actionFab.text = "全部播放"
                 binding.actionFab.setIconResource(R.drawable.ic_play)
                 binding.actionFab.visibility = if (list.isNotEmpty()) View.VISIBLE else View.GONE
+                resolvePendingFlacMetadata(list)
             }
             TAB_PLAYLISTS -> {
                 val list = libraryManager.getPlaylists()
@@ -454,6 +468,7 @@ class LibraryActivity : AppCompatActivity() {
                 binding.actionFab.text = "全部播放"
                 binding.actionFab.setIconResource(R.drawable.ic_play)
                 binding.actionFab.visibility = if (list.isNotEmpty()) View.VISIBLE else View.GONE
+                resolvePendingFlacMetadata(list)
             }
             TAB_OFFLINE -> {
                 val list = offlineAlbums
@@ -526,15 +541,14 @@ class LibraryActivity : AppCompatActivity() {
 
     private fun handleCardClick(item: LibraryGalleryItem, position: Int) {
         if (isInDetailMode()) {
-            if (activeDetailTracks.isNotEmpty()) {
-                playTrackRecords(activeDetailTracks, position)
-            }
+            val track = item.payload as? TrackRecord ?: activeDetailTracks.getOrNull(position) ?: return
+            playSingleTrackRecord(track)
             return
         }
         when (currentTab) {
-            TAB_FAVORITES -> playTrackRecords(libraryManager.getFavorites(), position)
+            TAB_FAVORITES -> (item.payload as? TrackRecord)?.let(::playSingleTrackRecord)
             TAB_PLAYLISTS -> (item.payload as? CustomPlaylist)?.let { openPlaylistDetail(it) }
-            TAB_HISTORY -> playTrackRecords(libraryManager.getHistory(), position)
+            TAB_HISTORY -> (item.payload as? TrackRecord)?.let(::playSingleTrackRecord)
             TAB_OFFLINE -> (item.payload as? OfflineManager.OfflineAlbum)?.let { openOfflineAlbumDetail(it) }
         }
     }
@@ -773,15 +787,21 @@ class LibraryActivity : AppCompatActivity() {
             for (file in audioFiles) {
                 val uriStr = file.uri.toString()
                 if (uriStr in coveredUris) continue
+                var title = file.nameWithoutExtension
+                var artist = ""
+                var albumTitle = album.name
+                var metadataResolved = false
                 if (file.extension == "flac") {
-                    val embedded = runCatching {
-                        val headerBytes = contentResolver.openInputStream(file.uri)?.use { input ->
+                    val headerBytes = runCatching {
+                        contentResolver.openInputStream(file.uri)?.use { input ->
                             val buf = ByteArray(2_097_152)
                             val read = input.read(buf)
                             if (read > 0) buf.copyOf(read) else ByteArray(0)
                         } ?: ByteArray(0)
-                        FlacCueExtractor.extract(headerBytes, file.nameWithoutExtension)
                     }.getOrNull()
+                    val embedded = headerBytes?.let {
+                        runCatching { FlacCueExtractor.extract(it, file.nameWithoutExtension) }.getOrNull()
+                    }
                     if (embedded != null && embedded.tracks.size > 1) {
                         result.addAll(
                             embedded.toTrackRecords(
@@ -792,20 +812,84 @@ class LibraryActivity : AppCompatActivity() {
                         )
                         continue
                     }
+                    val flacMeta = FlacCueExtractor.extractLocalMetadata(
+                        this@LibraryActivity,
+                        file.uri,
+                        headerBytes
+                    )
+                    if (flacMeta != null) {
+                        if (flacMeta.title.isNotBlank()) title = flacMeta.title
+                        if (flacMeta.artist.isNotBlank()) artist = flacMeta.artist
+                        if (flacMeta.album.isNotBlank()) albumTitle = flacMeta.album
+                        metadataResolved = true
+                    }
                 }
                 result.add(
                     TrackRecord(
                         key = uriStr,
                         mediaId = uriStr,
                         uri = uriStr,
-                        title = file.nameWithoutExtension,
-                        albumTitle = album.name
+                        title = title,
+                        artist = artist,
+                        albumTitle = albumTitle,
+                        metadataResolved = metadataResolved
                     )
                 )
             }
 
             result
         }
+
+    private fun resolvePendingFlacMetadata(tracks: List<TrackRecord>) {
+        val pending = tracks.filter { it.needsFlacMetadataResolution() && resolvingFlacKeys.add(it.key) }
+        if (pending.isEmpty()) return
+
+        for (track in pending) {
+            lifecycleScope.launch {
+                try {
+                    val result = flacMetadataSemaphore.withPermit {
+                        withContext(Dispatchers.IO) {
+                            fetchTrackFlacMetadata(track)
+                        }
+                    }
+                    if (result != null) {
+                        libraryManager.updateTrackMetadata(
+                            key = track.key,
+                            title = result.title,
+                            artist = result.artist,
+                            albumTitle = result.album,
+                            metadataResolved = true
+                        )
+                    } else {
+                        resolvingFlacKeys.remove(track.key)
+                    }
+                } catch (_: Exception) {
+                    resolvingFlacKeys.remove(track.key)
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchTrackFlacMetadata(track: TrackRecord): FlacMetadata? {
+        val localUriStr = when {
+            track.mediaId.startsWith("content://") || track.mediaId.startsWith("file://") -> track.mediaId
+            track.uri.startsWith("content://") || track.uri.startsWith("file://") -> track.uri
+            else -> null
+        }
+        if (localUriStr != null) {
+            return FlacCueExtractor.extractLocalMetadata(this, Uri.parse(localUriStr))
+        }
+        val remotePath = track.mediaId.ifEmpty {
+            track.key.takeIf { it.startsWith("/") }.orEmpty()
+        }
+        if (remotePath.isEmpty()) return null
+        val result = webDavRepository.loadFlacMetadata(remotePath)
+        return if (result.isSuccess) {
+            result.getOrNull() ?: FlacMetadata()
+        } else {
+            null
+        }
+    }
 
     private fun showCreatePlaylistDialog() {
         val input = EditText(this).apply {
@@ -928,6 +1012,10 @@ class LibraryActivity : AppCompatActivity() {
         pendingMediaItems?.let { (items, idx) ->
             pendingMediaItems = null
             playMediaItems(items, idx)
+        }
+        pendingSingleTrack?.let { track ->
+            pendingSingleTrack = null
+            playSingleTrackRecord(track)
         }
 
         runOnUiThread {
@@ -1212,6 +1300,36 @@ class LibraryActivity : AppCompatActivity() {
                 TrackRecord.fromMediaItem(controller.getMediaItemAt(i))?.let(::add)
             }
         }
+    }
+
+    private fun playSingleTrackRecord(track: TrackRecord) {
+        val controller = mediaController
+        if (controller == null) {
+            pendingSingleTrack = track
+            connectToPlayerService()
+            Toast.makeText(this, "正在连接播放器...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val existingIndex = (0 until controller.mediaItemCount).firstOrNull { index ->
+            TrackRecord.buildKey(controller.getMediaItemAt(index)) == track.key
+        }
+        if (existingIndex != null) {
+            controller.seekTo(existingIndex, 0L)
+        } else {
+            controller.addMediaItem(track.toMediaItem())
+            controller.seekTo(controller.mediaItemCount - 1, 0L)
+        }
+        if (controller.playbackState == Player.STATE_IDLE) {
+            controller.prepare()
+        }
+        controller.play()
+        updateMiniPlayerVisibility()
+        updateMiniPlayerInfo()
+        Toast.makeText(
+            this,
+            "正在播放：${track.title.ifEmpty { "未知曲目" }}",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun playTrackRecords(records: List<TrackRecord>, startIndex: Int) {

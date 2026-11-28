@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 
 fun CueSheet.toTrackRecords(
     audioUri: String,
@@ -46,17 +47,35 @@ data class TrackRecord(
     val clipStartMs: Long = 0L,
     val clipEndMs: Long = C.TIME_END_OF_SOURCE,
     val directoryPath: String = "",
-    val timestampMs: Long = System.currentTimeMillis()
+    val timestampMs: Long = System.currentTimeMillis(),
+    val metadataResolved: Boolean = false
 ) {
+    fun isCueClipped(): Boolean =
+        clipStartMs > 0L || (clipEndMs != C.TIME_END_OF_SOURCE && clipEndMs > clipStartMs)
+
+    fun isFlacTrack(): Boolean =
+        mediaId.lowercase(Locale.ROOT).endsWith(".flac") ||
+            uri.lowercase(Locale.ROOT).endsWith(".flac") ||
+            key.lowercase(Locale.ROOT).endsWith(".flac") ||
+            title.lowercase(Locale.ROOT).endsWith(".flac")
+
+    fun needsFlacMetadataResolution(): Boolean {
+        if (metadataResolved || isCueClipped()) return false
+        if (isFlacTrack()) return true
+        val isLocal = uri.startsWith("content://") || uri.startsWith("file://")
+        return isLocal && artist.isEmpty()
+    }
+
     fun toMediaItem(): MediaItem {
         val metadataBuilder = MediaMetadata.Builder()
             .setTitle(title.ifEmpty { "Unknown" })
         if (artist.isNotEmpty()) metadataBuilder.setArtist(artist)
         if (albumTitle.isNotEmpty()) metadataBuilder.setAlbumTitle(albumTitle)
         if (trackNumber != null && trackNumber > 0) metadataBuilder.setTrackNumber(trackNumber)
-        if (directoryPath.isNotEmpty()) {
+        if (directoryPath.isNotEmpty() || metadataResolved) {
             metadataBuilder.setExtras(Bundle().apply {
-                putString(KEY_DIRECTORY_PATH, directoryPath)
+                if (directoryPath.isNotEmpty()) putString(KEY_DIRECTORY_PATH, directoryPath)
+                if (metadataResolved) putBoolean(KEY_FLAC_METADATA_RESOLVED, true)
             })
         }
 
@@ -90,10 +109,12 @@ data class TrackRecord(
         put("clipEndMs", clipEndMs)
         if (directoryPath.isNotEmpty()) put("directoryPath", directoryPath)
         put("timestampMs", timestampMs)
+        if (metadataResolved) put("metadataResolved", true)
     }
 
     companion object {
         private const val KEY_DIRECTORY_PATH = "tlmc_directory_path"
+        private const val KEY_FLAC_METADATA_RESOLVED = "tlmc_flac_metadata_resolved"
 
         fun buildKey(mediaItem: MediaItem): String {
             val mediaId = mediaItem.mediaId
@@ -122,7 +143,8 @@ data class TrackRecord(
                 clipStartMs = clip.startPositionMs,
                 clipEndMs = clip.endPositionMs,
                 directoryPath = dirPath,
-                timestampMs = System.currentTimeMillis()
+                timestampMs = System.currentTimeMillis(),
+                metadataResolved = meta.extras?.getBoolean(KEY_FLAC_METADATA_RESOLVED, false) ?: false
             )
         }
 
@@ -141,7 +163,8 @@ data class TrackRecord(
                 clipStartMs = obj.optLong("clipStartMs", 0L).coerceAtLeast(0L),
                 clipEndMs = obj.optLong("clipEndMs", C.TIME_END_OF_SOURCE),
                 directoryPath = obj.optString("directoryPath"),
-                timestampMs = obj.optLong("timestampMs", 0L)
+                timestampMs = obj.optLong("timestampMs", 0L),
+                metadataResolved = obj.optBoolean("metadataResolved", false)
             )
         }
     }
